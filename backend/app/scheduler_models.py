@@ -19,6 +19,7 @@ class ScheduleTask(BaseModel):
     run_count: int = 0
 
 class ScheduleTaskCreate(BaseModel):
+    id: Optional[str] = None
     name: str
     description: str = ""
     trigger_type: str = "once"

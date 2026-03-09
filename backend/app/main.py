@@ -673,6 +673,7 @@ async def startup_event():
     if not diary_task_exists:
         from app.scheduler_models import ScheduleTaskCreate
         diary_task = ScheduleTaskCreate(
+            id="diary_reminder",
             name="日记提醒",
             description="每2小时提醒AI写日记",
             trigger_type="interval",

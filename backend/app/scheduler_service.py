@@ -53,7 +53,7 @@ class TaskScheduler:
         import uuid
         current_time = int(time.time() * 1000)
         
-        task_id = str(uuid.uuid4())[:8]
+        task_id = create.id if create.id else str(uuid.uuid4())[:8]
         
         task = ScheduleTask(
             id=task_id,
