@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+openai
+mcp
+python-dotenv
+croniter
+python-telegram-bot>=20.0
+lark-oapi>=1.0.0

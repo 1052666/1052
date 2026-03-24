@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>1052 助理</title>
+
+  <!-- Markdown & syntax highlighting (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+
+  <!-- App styles -->
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body>
+
+<aside id="sidebar">
+  <div id="sidebar-header">
+    <h1><span>🤖</span> 1052 助理</h1>
+  </div>
+
+  <!-- Tab 导航 -->
+  <div id="sidebar-tabs">
+    <button class="tab-btn active" data-tab="chat">💬 对话</button>
+    <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
+  </div>
+
+  <!-- Tab: 对话 -->
+  <div id="tab-chat" class="tab-panel" style="display:flex;flex-direction:column">
+    <div class="session-card">
+      <div class="label">当前对话</div>
+      <div class="count" id="msg-count">0 <span>条消息</span></div>
+    </div>
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:8px">指令</div>
+    <div class="cmd-list">
+      <div class="cmd-item" data-cmd="/new">
+        <code>/new</code>
+        <span class="cmd-desc">新建对话，清空上下文</span>
+      </div>
+      <div class="cmd-item" id="evolution-cmd" data-cmd="/1052进化">
+        <code>/1052进化</code>
+        <span class="cmd-desc">开启自主进化模式</span>
+      </div>
+    </div>
+
+    <!-- 进化模式状态 -->
+    <div id="evolution-panel" style="display:none; margin-top:12px; padding:10px; background:#1a1d23; border:1px solid #3d4452; border-radius:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:600;color:#f9fafb">🔄 进化模式</span>
+        <span id="evolution-status-badge" style="font-size:10px;padding:2px 6px;border-radius:4px;background:#374151;color:#9ca3af">未启动</span>
+      </div>
+      <div id="evolution-info" style="font-size:11px;color:#6b7280;margin-bottom:8px"></div>
+      <button id="evolution-stop-btn" style="display:none;width:100%;background:#dc2626;border:none;color:white;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">停止进化</button>
+    </div>
+  </div>
+
+  <!-- Tab: 设置 -->
+  <div id="tab-settings" class="tab-panel" style="display:none">
+  <div id="settings-section">
+    <div class="settings-group">
+      <label>API 密钥</label>
+      <div class="api-key-wrap">
+        <input type="password" id="api-key" placeholder="sk-..." />
+        <button class="toggle-key" id="toggle-key" title="显示/隐藏">👁</button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label>API Base URL</label>
+      <input type="text" id="base-url" value="https://api.openai.com/v1" placeholder="https://api.openai.com/v1" />
+    </div>
+
+    <div class="settings-group">
+      <label>模型</label>
+      <select id="model">
+        <option value="gpt-4o">GPT-4o</option>
+        <option value="gpt-4o-mini" selected>GPT-4o Mini</option>
+        <option value="gpt-4-turbo">GPT-4 Turbo</option>
+        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+        <option value="deepseek-chat">DeepSeek Chat</option>
+        <option value="deepseek-reasoner">DeepSeek Reasoner</option>
+        <option value="moonshot-v1-8k">Moonshot v1-8k</option>
+        <option value="glm-4-flash">GLM-4 Flash</option>
+        <option value="custom">自定义...</option>
+      </select>
+      <input type="text" id="custom-model" placeholder="输入自定义模型名称"
+             style="margin-top:6px;display:none" />
+    </div>
+
+    <div class="settings-group">
+      <label style="display:flex;align-items:center;justify-content:space-between">
+        <span>系统提示词 <span style="color:#4b5563;font-weight:400;text-transform:none;letter-spacing:0">(system_prompt.md)</span></span>
+        <span style="display:flex;gap:6px">
+          <button id="sp-edit-btn" title="编辑" style="background:#374151;border:none;color:#d1d5db;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">编辑</button>
+          <button id="sp-save-btn" title="保存到文件" style="display:none;background:#2563eb;border:none;color:white;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">保存</button>
+          <button id="sp-cancel-btn" title="取消" style="display:none;background:#374151;border:none;color:#d1d5db;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">取消</button>
+        </span>
+      </label>
+      <!-- 预览模式 -->
+      <div id="sp-preview" style="background:#2d3340;border:1px solid #3d4452;border-radius:6px;padding:10px;font-size:12px;color:#9ca3af;line-height:1.6;min-height:60px;white-space:pre-wrap;word-break:break-all"></div>
+      <!-- 编辑模式 -->
+      <textarea id="system-prompt" rows="8" style="display:none;font-family:'Fira Code',monospace;font-size:12px"></textarea>
+    </div>
+
+    <div class="settings-group">
+      <label>温度 Temperature</label>
+      <div class="range-wrap">
+        <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" />
+        <span id="temp-val">0.7</span>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label>最大 Token 数</label>
+      <input type="number" id="max-tokens" value="32768" min="256" max="32768" />
+    </div>
+
+    <button id="save-settings-btn">保存设置</button>
+
+    <!-- ─── Skills 技能 ──────────────────────────── -->
+    <div style="margin-top:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af">
+          🎯 Skills 技能
+        </span>
+        <button id="skill-reload-btn" style="background:#374151;border:none;color:#d1d5db;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">↺ 重载</button>
+      </div>
+      <div id="skill-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+        <div style="font-size:12px;color:#6b7280;text-align:center;padding:8px 0">加载中...</div>
+      </div>
+    </div>
+
+    <!-- ─── 定时任务 ──────────────────────────── -->
+    <div style="margin-top:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af">
+          🕐 定时任务
+        </span>
+        <div style="display:flex;gap:6px">
+          <button id="sched-add-btn" style="background:#2563eb;border:none;color:white;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">+ 新建</button>
+          <button id="sched-refresh-btn" style="background:#374151;border:none;color:#d1d5db;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">↺ 刷新</button>
+        </div>
+      </div>
+      <div id="scheduler-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+        <div style="font-size:12px;color:#6b7280;text-align:center;padding:8px 0">加载中...</div>
+      </div>
+
+      <!-- 新建/编辑表单 -->
+      <div id="sched-form-wrap" style="display:none;background:#1a1d23;border:1px solid #3d4452;border-radius:8px;padding:14px;margin-bottom:10px">
+        <div id="sched-form-title" style="font-size:13px;font-weight:600;color:#f9fafb;margin-bottom:12px">新建定时任务</div>
+        <input type="hidden" id="sched-f-id" />
+        <div class="settings-group">
+          <label>任务名称</label>
+          <input type="text" id="sched-f-name" placeholder="早报摘要" />
+        </div>
+        <div class="settings-group">
+          <label>提示词</label>
+          <textarea id="sched-f-prompt" rows="4" placeholder="请总结今日科技新闻..."></textarea>
+        </div>
+        <div class="settings-group">
+          <label>调度表达式</label>
+          <input type="text" id="sched-f-schedule" placeholder="daily:09:00 | interval:30 | once:2024-12-31T09:00:00" />
+          <div style="font-size:10px;color:#6b7280;margin-top:4px">daily:HH:MM · interval:分钟数 · cron:表达式 · once:ISO时间</div>
+        </div>
+        <div class="settings-group">
+          <label>API Key <span style="color:#6b7280;font-weight:400;text-transform:none">(编辑时留空保持不变)</span></label>
+          <input type="password" id="sched-f-apikey" placeholder="sk-..." />
+        </div>
+        <div class="settings-group">
+          <label>Base URL</label>
+          <input type="text" id="sched-f-baseurl" value="https://api.openai.com/v1" />
+        </div>
+        <div class="settings-group">
+          <label>模型</label>
+          <input type="text" id="sched-f-model" value="gpt-4o-mini" />
+        </div>
+        <div class="settings-group">
+          <label>Temperature</label>
+          <input type="number" id="sched-f-temp" value="0.7" min="0" max="2" step="0.1" />
+        </div>
+        <div class="settings-group">
+          <label>Max Tokens</label>
+          <input type="number" id="sched-f-maxtok" value="2048" min="256" max="32768" />
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button id="sched-form-submit" style="flex:1;background:#2563eb;border:none;color:white;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">保存</button>
+          <button id="sched-form-cancel" style="background:#374151;border:none;color:#d1d5db;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:12px">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── MCP 服务器 ─────────────────────────── -->
+    <div style="margin-top:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af">
+          🔌 MCP 服务器
+        </span>
+        <div style="display:flex;gap:6px">
+          <button id="mcp-edit-btn" style="background:#374151;border:none;color:#d1d5db;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">配置</button>
+          <button id="mcp-reload-btn" style="background:#374151;border:none;color:#d1d5db;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">↺ 重连</button>
+        </div>
+      </div>
+
+      <!-- 服务器状态列表 -->
+      <div id="mcp-server-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+        <div style="font-size:12px;color:#6b7280;text-align:center;padding:8px 0">加载中...</div>
+      </div>
+
+      <!-- JSON 配置编辑器（折叠） -->
+      <div id="mcp-editor-wrap" style="display:none">
+        <textarea id="mcp-config-editor" rows="10"
+          style="width:100%;background:#1a1d23;border:1px solid #3d4452;border-radius:6px;
+                 color:#e5e7eb;font-size:11px;font-family:'Fira Code',monospace;padding:8px;
+                 resize:vertical;outline:none;line-height:1.5"></textarea>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button id="mcp-save-btn" style="flex:1;background:#2563eb;border:none;color:white;padding:6px;border-radius:6px;cursor:pointer;font-size:12px">保存并重连</button>
+          <button id="mcp-cancel-btn" style="background:#374151;border:none;color:#d1d5db;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── IM 集成配置 ─────────────────────────── -->
+    <div style="margin-top:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af">
+          📱 IM 集成
+        </span>
+        <div style="display:flex;gap:6px">
+          <span id="im-status-list" style="font-size:11px;color:#6b7280"></span>
+          <button id="im-reload-btn" style="background:#374151;border:none;color:#d1d5db;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">↺ 重载</button>
+        </div>
+      </div>
+
+      <!-- Telegram -->
+      <div style="background:#1a1d23;border:1px solid #3d4452;border-radius:6px;padding:10px;margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+          <input type="checkbox" id="im-tg-enabled" style="accent-color:#2563eb" />
+          <span style="font-size:12px;font-weight:600;color:#e5e7eb">Telegram 机器人</span>
+        </label>
+        <input type="password" id="im-tg-token" placeholder="Bot Token from @BotFather"
+               style="width:100%;padding:6px 8px;background:#2d3340;border:1px solid #3d4452;border-radius:4px;color:#e5e7eb;font-size:12px;outline:none" />
+      </div>
+
+      <!-- 飞书 -->
+      <div style="background:#1a1d23;border:1px solid #3d4452;border-radius:6px;padding:10px;margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+          <input type="checkbox" id="im-lark-enabled" style="accent-color:#2563eb" />
+          <span style="font-size:12px;font-weight:600;color:#e5e7eb">飞书 机器人</span>
+        </label>
+        <input type="text" id="im-lark-appid" placeholder="App ID (cli_xxxxxxxxxxxx)"
+               style="width:100%;padding:6px 8px;background:#2d3340;border:1px solid #3d4452;border-radius:4px;color:#e5e7eb;font-size:12px;outline:none;margin-bottom:6px" />
+        <input type="password" id="im-lark-secret" placeholder="App Secret"
+               style="width:100%;padding:6px 8px;background:#2d3340;border:1px solid #3d4452;border-radius:4px;color:#e5e7eb;font-size:12px;outline:none;margin-bottom:6px" />
+        <input type="password" id="im-lark-encrypt" placeholder="Encrypt Key (加密密钥，可选) - 事件与回调加密策略"
+               style="width:100%;padding:6px 8px;background:#2d3340;border:1px solid #3d4452;border-radius:4px;color:#e5e7eb;font-size:12px;outline:none;margin-bottom:6px" />
+        <input type="password" id="im-lark-verify" placeholder="Verification Token (验证令牌，可选) - 用于webhook验证"
+               style="width:100%;padding:6px 8px;background:#2d3340;border:1px solid #3d4452;border-radius:4px;color:#e5e7eb;font-size:12px;outline:none" />
+        <div style="font-size:10px;color:#6b7280;margin-top:6px">
+          提示：长连接模式下 Encrypt Key 和 Verification Token 可不填
+        </div>
+      </div>
+
+      <button id="im-save-btn" style="width:100%;background:#2563eb;border:none;color:white;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">保存 IM 配置</button>
+    </div>
+  </div>
+  </div><!-- /tab-settings -->
+
+  <div id="status-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">未连接</span>
+  </div>
+</aside>
+
+<div id="overlay"></div>
+
+<main id="main">
+  <div id="chat-header">
+    <div>
+      <button id="toggle-sidebar">☰</button>
+      <span style="margin-left:8px">
+        <h2 style="display:inline">1052 助理</h2>
+        <div class="subtitle" id="model-label">模型: 未配置</div>
+      </span>
+    </div>
+    <button id="clear-btn">🗑 清空对话</button>
+  </div>
+
+  <div id="chat-messages">
+    <div id="welcome">
+      <div class="icon">💬</div>
+      <h3>你好，我是 1052 助理</h3>
+      <p>在左侧配置 API 密钥和模型，<br/>然后在下方输入框开始聊天。</p>
+    </div>
+  </div>
+
+  <div id="input-area">
+    <div id="input-wrap">
+      <textarea id="user-input" rows="1" placeholder="输入消息... (Enter 发送，Shift+Enter 换行)"></textarea>
+      <button id="stop-btn" title="停止生成">⏹</button>
+      <button id="send-btn" title="发送 (Enter)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+    <div id="input-footer">
+      <span id="token-hint"></span>
+      <span>Enter 发送 · Shift+Enter 换行</span>
+    </div>
+  </div>
+</main>
+
+<!-- File preview modal -->
+<div id="file-preview-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;align-items:center;justify-content:center">
+  <div style="background:#1a1d23;border:1px solid #3d4452;border-radius:12px;width:min(780px,96vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #2d3340;flex-shrink:0">
+      <span id="file-preview-title" style="font-size:13px;font-weight:600;color:#f9fafb;word-break:break-all"></span>
+      <div style="display:flex;gap:8px;flex-shrink:0;margin-left:12px">
+        <a id="file-preview-download" href="#" style="background:#374151;border:none;color:#d1d5db;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;text-decoration:none">⬇ 下载</a>
+        <button onclick="closeFilePreview()" style="background:none;border:none;color:#9ca3af;font-size:22px;cursor:pointer;line-height:1">×</button>
+      </div>
+    </div>
+    <pre id="file-preview-body" style="flex:1;overflow:auto;padding:16px 18px;margin:0;font-size:12px;font-family:'Fira Code',monospace;color:#e5e7eb;white-space:pre-wrap;word-break:break-all;line-height:1.6"></pre>
+  </div>
+</div>
+
+<!-- Context viewer modal -->
+<div id="sched-ctx-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center">
+  <div style="background:#1a1d23;border:1px solid #3d4452;border-radius:12px;width:min(680px,96vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #2d3340">
+      <span id="sched-ctx-title" style="font-size:14px;font-weight:600;color:#f9fafb"></span>
+      <div style="display:flex;gap:8px">
+        <button id="sched-ctx-clear" style="background:#374151;border:none;color:#d1d5db;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">清空记录</button>
+        <button id="sched-ctx-close" style="background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;line-height:1">×</button>
+      </div>
+    </div>
+    <input type="hidden" id="sched-ctx-task-id" />
+    <pre id="sched-ctx-body" style="flex:1;overflow-y:auto;padding:16px 18px;margin:0;font-size:12px;font-family:'Fira Code',monospace;color:#e5e7eb;white-space:pre-wrap;word-break:break-all;line-height:1.6"></pre>
+  </div>
+</div>
+
+<!-- App scripts (order matters: helpers → state → features → main) -->
+<script src="/static/js/helpers.js"></script>
+<script src="/static/js/state.js"></script>
+<script src="/static/js/settings.js"></script>
+<script src="/static/js/mcp-panel.js"></script>
+<script src="/static/js/skills-panel.js"></script>
+<script src="/static/js/scheduler-panel.js"></script>
+<script src="/static/js/im-panel.js"></script>
+<script src="/static/js/chat.js"></script>
+<script src="/static/js/main.js"></script>
+
+</body>
+</html>
