@@ -66,9 +66,14 @@ async def lifespan(app: FastAPI):
 
 
 # ─── Chat handler for IM ──────────────────────────────────────────
-async def chat_stream_handler(messages: list, app_state):
+async def chat_stream_handler(messages: list, app_state, temperature: float = None):
     """为 IM 提供的流式聊天处理器（委托给 chat_engine）"""
-    async for chunk in chat_stream(messages, app_state):
+    # 如果没有传递温度，从配置文件读取
+    if temperature is None:
+        from core.config import load_config
+        cfg = load_config()
+        temperature = cfg.get("temperature", 0.7)
+    async for chunk in chat_stream(messages, app_state, temperature):
         yield chunk
 
 

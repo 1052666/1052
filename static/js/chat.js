@@ -144,6 +144,7 @@ async function sendMessage() {
       signal: state.abortController.signal,
       body: JSON.stringify({
         messages: state.messages,
+        temperature: state.settings.temperature,
       }),
     });
 

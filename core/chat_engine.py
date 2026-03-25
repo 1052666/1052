@@ -112,6 +112,7 @@ def _parse_user_info(messages: list) -> tuple[str, str, list]:
 async def chat_stream(
     messages: list,
     app_state,
+    temperature: Optional[float] = None,
 ) -> AsyncIterable[dict]:
     """
     流式聊天处理器
@@ -119,6 +120,7 @@ async def chat_stream(
     Args:
         messages: 消息列表
         app_state: FastAPI app.state，包含 skill_manager, mcp_manager, scheduler 等
+        temperature: 温度参数（可选，不传则用配置文件默认值）
 
     Yields:
         dict: {"type": "delta"|"done"|"error"|"tool_call"|"tool_result", ...}
@@ -155,6 +157,12 @@ async def chat_stream(
     all_tools += app_state.mcp_manager.get_openai_tools()
     all_tools = _filter_tools_by_platform(all_tools, platform)
 
+    # 温度：如果传入了就用传入的，否则用配置文件，且最低为 0.3
+    if temperature is None:
+        temperature = max(cfg.get("temperature", 0.7), 0.3)
+    else:
+        temperature = max(temperature, 0.3)
+
     try:
         while True:
             stream = await client.chat.completions.create(
@@ -163,7 +171,7 @@ async def chat_stream(
                 tools=all_tools,
                 tool_choice="auto",
                 stream=True,
-                temperature=max(cfg.get("temperature", 0.7), 0.3),
+                temperature=temperature,
                 max_tokens=cfg.get("max_tokens", 32768),
             )
 

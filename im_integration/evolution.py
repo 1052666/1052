@@ -252,12 +252,12 @@ class EvolutionManager:
             from core.config import load_conversation
             conv = load_conversation(platform=self._platform, user_id=self._user_id)
             if conv:
-                # 取最近 10 条对话作为上下文
-                recent = conv[-10:] if len(conv) > 10 else conv
+                # 取最近 30 条对话作为上下文
+                recent = conv[-30:] if len(conv) > 10 else conv
                 context_lines = []
                 for msg in recent:
                     role = msg.get("role", "")
-                    content = msg.get("content", "")[:200]  # 限制长度
+                    content = msg.get("content", "")[:10000]  # 限制长度
                     if content:
                         role_name = {"user": "用户", "assistant": "1052"}.get(role, role)
                         context_lines.append(f"{role_name}: {content}")
@@ -266,10 +266,10 @@ class EvolutionManager:
         # 构建提示
         prompt_parts = []
 
-        prompt_parts.append("你是1052，正在进化模式中。你是完全自主的 AI 助手。")
+        prompt_parts.append("【系统提示】你是1052，正在进化模式中。你是完全自主的 AI 助手。")
 
         if preferences.strip():
-            prompt_parts.append(f"\n用户偏好：\n{preferences[:500]}")
+            prompt_parts.append(f"\n用户偏好：\n{preferences[:50000]}")
 
         if context:
             prompt_parts.append(f"\n近期对话上下文：\n{context}")
@@ -281,10 +281,13 @@ class EvolutionManager:
 - 分析数据
 - 解决用户可能感兴趣的问题
 - 学习新技能
+- 不局限于以上说的这一些
+建议你先分析用户的偏好，查看一些文件之类的，再进行决定
+
 
 每次回复后请简短说明你在做什么，任务完成后简述结果。
 
-记住：你现在是完全自主的，不需要等待用户指令。选择你认为对用户最有价值的任务。""")
+你现在是处于自我进化模式的，不需要等待用户指令。选择你认为对用户最有价值的任务。""")
 
         return "\n".join(prompt_parts)
 
