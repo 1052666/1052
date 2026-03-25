@@ -3,8 +3,12 @@ import shutil
 import asyncio
 import glob as glob_module
 import urllib.request
+import platform
 
 OUTPUT_DIR = os.path.join("data", "1111")   # AI 生成文件的默认存放目录
+
+# 检测当前操作系统
+_IS_WINDOWS = platform.system() == "Windows"
 
 # ─── 全局状态（由 server.py 设置）────────────────────────────────
 _scheduler = None  # TaskScheduler 实例
@@ -46,11 +50,11 @@ BUILTIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "run_cmd",
-            "description": "在本地 Windows CMD 中执行命令，返回标准输出和错误输出",
+            "description": "执行本地命令，返回标准输出和错误输出。在 Windows 上使用 CMD，Linux/Mac 上使用 Shell。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "要执行的 CMD 命令"},
+                    "command": {"type": "string", "description": "要执行的命令（Windows 用 dir/cd，Linux/Mac 用 ls/cd）"},
                     "cwd":     {"type": "string", "description": "工作目录路径（可选）"},
                 },
                 "required": ["command"],
@@ -102,11 +106,11 @@ BUILTIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "list_dir",
-            "description": "列出目录中的文件和子目录",
+            "description": "【强制使用】列出目录内容。**当用户询问目录、磁盘、文件夹里有什么时，必须使用此工具**，禁止用文字描述或猜测。路径支持绝对路径或相对路径。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path":    {"type": "string", "description": "目录路径，默认当前目录"},
+                    "path":    {"type": "string", "description": "目录路径，如 /home/user、./data、C:\\Users\\xxx 等"},
                     "pattern": {"type": "string", "description": "文件名过滤模式，如 *.txt（可选）"},
                 },
             },
@@ -181,7 +185,22 @@ BUILTIN_TOOLS = [
         "type": "function",
         "function": {
             "name": "send_to_tg",
-            "description": "发送本地文件给 Telegram 用户。当需要将文件发送给用户时使用，例如生成了图片、文档、视频等文件后调用此工具发送。",
+            "description": "发送本地文件给 Telegram 用户。当用户来自 Telegram 平台时，使用此工具发送文件（图片、文档、视频等）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "要发送的文件路径（绝对路径或相对于 data/1111/ 的路径）"},
+                    "caption": {"type": "string", "description": "文件的说明文字（可选）"},
+                },
+                "required": ["file_path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_to_lark",
+            "description": "发送本地文件给飞书用户。当用户来自飞书平台时，使用此工具发送文件（图片、文档、视频、压缩包等任何文件）。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -261,13 +280,16 @@ async def execute_builtin_tool(name: str, args: dict) -> str:
                     proc.kill()
                     await proc.wait()
                     return f"[错误] 命令执行超时（{timeout}秒）"
-                # Windows 原生命令输出通常是 GBK，先尝试 GBK 解码
+                # Windows 原生命令输出通常是 GBK，Linux/Mac 是 UTF-8
                 def decode_output(data):
                     if not data:
                         return ""
-                    try:
-                        return data.decode("gbk", errors="replace")
-                    except Exception:
+                    if _IS_WINDOWS:
+                        try:
+                            return data.decode("gbk", errors="replace")
+                        except Exception:
+                            return data.decode("utf-8", errors="replace")
+                    else:
                         return data.decode("utf-8", errors="replace")
                 out = decode_output(stdout) + decode_output(stderr)
                 if proc.returncode != 0:
@@ -417,7 +439,7 @@ async def execute_builtin_tool(name: str, args: dict) -> str:
                 return f"[错误] 移动失败: {e}"
 
         elif name == "send_to_tg":
-            # 发送文件给 Telegram 用户
+            # 发送文件给 Telegram 用户（仅当平台为 telegram 时使用）
             # 返回特殊标记，让 telegram_bot 识别并发送真实文件
             file_path = args.get("file_path", "")
             caption = args.get("caption", "")
@@ -438,6 +460,29 @@ async def execute_builtin_tool(name: str, args: dict) -> str:
             else:
                 # 文件不在 output 目录，直接返回路径
                 return f"[TG_FILE:{abs_path}]"
+
+        elif name == "send_to_lark":
+            # 发送文件给飞书用户（仅当平台为 lark 时使用）
+            # 返回特殊标记，让 lark_bot 识别并发送真实文件
+            file_path = args.get("file_path", "")
+            caption = args.get("caption", "")
+            if not file_path:
+                return "[错误] file_path 不能为空"
+
+            # 检查文件是否存在
+            abs_path = os.path.abspath(file_path)
+            if not os.path.exists(abs_path):
+                return f"[错误] 文件不存在: {abs_path}"
+
+            # 获取相对于 data/1111 的路径
+            abs_outdir = os.path.abspath(OUTPUT_DIR)
+            if abs_path.startswith(abs_outdir):
+                rel_path = os.path.relpath(abs_path, abs_outdir).replace("\\", "/")
+                # 返回特殊格式，让 lark_bot 识别
+                return f"[LARK_FILE:data/1111/{rel_path}]"
+            else:
+                # 文件不在 output 目录，直接返回路径
+                return f"[LARK_FILE:{abs_path}]"
 
         elif name == "create_scheduled_task":
             # 创建定时任务

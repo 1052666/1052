@@ -127,6 +127,7 @@ class EvolutionManager:
         self._platform = platform
         self._user_id = user_id
         self._start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self._stop_event = asyncio.Event()
 
         # 启动进化循环
         self._task = asyncio.create_task(self._run_loop())
@@ -139,6 +140,10 @@ class EvolutionManager:
             return "进化模式未启动"
 
         self._active = False
+
+        # 通知后台任务停止
+        if hasattr(self, '_stop_event'):
+            self._stop_event.set()
 
         if self._task:
             self._task.cancel()
@@ -174,14 +179,30 @@ class EvolutionManager:
 
     async def _run_loop(self):
         """进化模式后台循环"""
-        evolution_prompt = """你是1052，正在进化模式中。请自主思考并执行你认为有意义的任务，可以是搜索信息、生成内容、编写代码、分析数据等任何你能做的事情。每次回复后请简短说明你在做什么。记住：你现在是完全自主的，不需要等待用户指令。"""
+        # 用于通知后台任务退出的事件
+        stop_event = asyncio.Event()
+
+        def cancel_handler():
+            stop_event.set()
 
         while self._active:
             try:
+                # 重置停止事件
+                stop_event.clear()
+
                 # 读取配置的间隔
                 interval = get_evolution_interval()
                 self._log("[系统]", f"等待 {interval} 秒后执行下一次进化")
-                await asyncio.sleep(interval)
+
+                # 使用 wait_for 允许被打断
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=interval)
+                    # 如果 stop_event 被设置，说明被打断
+                    self._log("[系统]", "收到停止信号")
+                    break
+                except asyncio.TimeoutError:
+                    # 正常超时，继续执行
+                    pass
 
                 if not self._active:
                     break
@@ -192,6 +213,9 @@ class EvolutionManager:
                 if self._chat_handler:
                     full_response = ""
                     try:
+                        # 构建增强的进化 prompt，包含上下文
+                        evolution_prompt = await self._build_evolution_prompt()
+
                         messages = [{"role": "user", "content": evolution_prompt}]
                         async for chunk in self._chat_handler(messages):
                             if not self._active:
@@ -211,9 +235,58 @@ class EvolutionManager:
                         await self._send_to_user(full_response)
 
             except asyncio.CancelledError:
+                self._log("[系统]", "任务被取消")
                 break
             except Exception as e:
                 self._log("[循环错误]", str(e))
+
+    async def _build_evolution_prompt(self) -> str:
+        """构建进化提示，包含用户上下文"""
+        # 获取用户偏好
+        from core.config import read_preferences
+        preferences = read_preferences()
+
+        # 获取对话上下文
+        context = ""
+        if self._platform and self._user_id:
+            from core.config import load_conversation
+            conv = load_conversation(platform=self._platform, user_id=self._user_id)
+            if conv:
+                # 取最近 10 条对话作为上下文
+                recent = conv[-10:] if len(conv) > 10 else conv
+                context_lines = []
+                for msg in recent:
+                    role = msg.get("role", "")
+                    content = msg.get("content", "")[:200]  # 限制长度
+                    if content:
+                        role_name = {"user": "用户", "assistant": "1052"}.get(role, role)
+                        context_lines.append(f"{role_name}: {content}")
+                context = "\n".join(context_lines)
+
+        # 构建提示
+        prompt_parts = []
+
+        prompt_parts.append("你是1052，正在进化模式中。你是完全自主的 AI 助手。")
+
+        if preferences.strip():
+            prompt_parts.append(f"\n用户偏好：\n{preferences[:500]}")
+
+        if context:
+            prompt_parts.append(f"\n近期对话上下文：\n{context}")
+
+        prompt_parts.append("""
+请自主思考并执行你认为有意义的任务。可以是：
+- 搜索最新信息
+- 生成内容（文章、代码、报告等）
+- 分析数据
+- 解决用户可能感兴趣的问题
+- 学习新技能
+
+每次回复后请简短说明你在做什么，任务完成后简述结果。
+
+记住：你现在是完全自主的，不需要等待用户指令。选择你认为对用户最有价值的任务。""")
+
+        return "\n".join(prompt_parts)
 
     async def _send_to_user(self, message: str):
         """发送消息给用户"""
@@ -236,37 +309,80 @@ class EvolutionManager:
                 self._log("[发送错误]", str(e))
 
         elif self._platform == "lark" and self._app_state:
-            # 飞书平台
+            # 飞书平台 - 使用 open_id 发送私信
             try:
                 im = self._app_state.im_manager
-                if im and im.lark and im.lark.client:
-                    card = {
-                        "config": {"wide_screen_mode": True},
-                        "header": {
-                            "title": {"tag": "plain_text", "content": "进化结果"},
-                            "template": "blue"
-                        },
-                        "elements": [
-                            {
-                                "tag": "div",
-                                "text": {
-                                    "tag": "lark_md",
-                                    "content": message
+                if im and im.lark:
+                    # 优先使用 FeishuFileClient（支持 open_id）
+                    if im.lark._file_client:
+                        result_card = {
+                            "config": {"wide_screen_mode": True},
+                            "header": {
+                                "title": {"tag": "plain_text", "content": "进化结果"},
+                                "template": "blue"
+                            },
+                            "elements": [
+                                {
+                                    "tag": "div",
+                                    "text": {
+                                        "tag": "lark_md",
+                                        "content": message
+                                    }
                                 }
-                            }
-                        ]
-                    }
-                    from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
-                    body = CreateMessageRequestBody.builder() \
-                        .receive_id(self._user_id) \
-                        .msg_type("interactive") \
-                        .content(json.dumps(card, ensure_ascii=False)) \
-                        .build()
-                    request = CreateMessageRequest.builder() \
-                        .receive_id_type("chat_id") \
-                        .request_body(body) \
-                        .build()
-                    im.lark.client.im.v1.message.create(request)
+                            ]
+                        }
+                        # 先发送文本说明
+                        try:
+                            im.lark._file_client.send_text_message(
+                                self._user_id, "open_id",
+                                "🔄 [进化结果]"
+                            )
+                        except:
+                            pass
+                        # 再发送卡片
+                        try:
+                            from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
+                            body = CreateMessageRequestBody.builder() \
+                                .receive_id(self._user_id) \
+                                .msg_type("interactive") \
+                                .content(json.dumps(result_card, ensure_ascii=False)) \
+                                .build()
+                            request = CreateMessageRequest.builder() \
+                                .receive_id_type("open_id") \
+                                .request_body(body) \
+                                .build()
+                            im.lark.client.im.v1.message.create(request)
+                        except Exception as e:
+                            self._log("[发送错误]", str(e))
+                    elif im.lark.client:
+                        # 降级：使用 SDK
+                        card = {
+                            "config": {"wide_screen_mode": True},
+                            "header": {
+                                "title": {"tag": "plain_text", "content": "进化结果"},
+                                "template": "blue"
+                            },
+                            "elements": [
+                                {
+                                    "tag": "div",
+                                    "text": {
+                                        "tag": "lark_md",
+                                        "content": message
+                                    }
+                                }
+                            ]
+                        }
+                        from lark_oapi.api.im.v1 import CreateMessageRequest, CreateMessageRequestBody
+                        body = CreateMessageRequestBody.builder() \
+                            .receive_id(self._user_id) \
+                            .msg_type("interactive") \
+                            .content(json.dumps(card, ensure_ascii=False)) \
+                            .build()
+                        request = CreateMessageRequest.builder() \
+                            .receive_id_type("open_id") \
+                            .request_body(body) \
+                            .build()
+                        im.lark.client.im.v1.message.create(request)
             except Exception as e:
                 self._log("[发送错误]", str(e))
 
