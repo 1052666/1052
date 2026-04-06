@@ -12,13 +12,25 @@ Systemsettings.set_system_volume()
 ```
 '''
 import os
+import sys
 import ctypes
 import shutil
-import win32com.client
-import win32clipboard
-from ctypes import cast, POINTER
-from comtypes import CLSCTX_ALL
-from pycaw.pycaw import AudioUtilities,IAudioEndpointVolume
+
+# Windows 专用依赖，非 Windows 平台设为 None
+if sys.platform == 'win32':
+    import win32com.client
+    import win32clipboard
+    from ctypes import cast, POINTER
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+else:
+    win32com = None
+    win32clipboard = None
+    cast = None
+    POINTER = None
+    CLSCTX_ALL = None
+    AudioUtilities = None
+    IAudioEndpointVolume = None
 ES_DISPLAY_REQUIRED=0x00000002
 ES_CONTINUOUS=0x80000000
 ES_CONTINUOUS=0x80000000

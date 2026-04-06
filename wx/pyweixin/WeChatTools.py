@@ -84,27 +84,43 @@ Also:
 ############################依赖环境###########################
 import os
 import re
+import sys
 import time
-import winreg
 import psutil
-import win32api
-import pyautogui
-import win32gui
-import win32con
-import win32com.client
 from typing import Literal
-from .Config import GlobalConfig
-from pywinauto import mouse,Desktop
-from .Errors import NetWorkNotConnectError #所有可能出现的异常
-from .Errors import NoSuchFriendError
-from .Errors import NotFriendError
-from .Errors import NoResultsError,NotInstalledError,NotStartError
-from pywinauto.application import TimeoutError
-from pywinauto.controls.uia_controls import ListViewWrapper,ListItemWrapper,EditWrapper #TypeHint要用到
-from pywinauto import WindowSpecification
-from pyweixin.Uielements import (Login_window,Main_window,SideBar,Independent_window,ListItems,
-Buttons,Texts,Menus,TabItems,Lists,Edits,Windows,Panes)
-from pyweixin.WinSettings import SystemSettings 
+
+# Windows 专用依赖，非 Windows 平台设为 None
+if sys.platform == 'win32':
+    import winreg
+    import win32api
+    import pyautogui
+    import win32gui
+    import win32con
+    import win32com.client
+    from .Config import GlobalConfig
+    from pywinauto import mouse, Desktop
+    from .Errors import NetWorkNotConnectError
+    from .Errors import NoSuchFriendError
+    from .Errors import NotFriendError
+    from .Errors import NoResultsError, NotInstalledError, NotStartError
+    from pywinauto.application import TimeoutError
+    from pywinauto.controls.uia_controls import ListViewWrapper, ListItemWrapper, EditWrapper
+    from pywinauto import WindowSpecification
+    from pyweixin.Uielements import (Login_window, Main_window, SideBar, Independent_window, ListItems,
+    Buttons, Texts, Menus, TabItems, Lists, Edits, Windows, Panes)
+    from pyweixin.WinSettings import SystemSettings
+else:
+    winreg = None
+    win32api = None
+    pyautogui = None
+    win32gui = None
+    win32con = None
+    win32com = None
+    GlobalConfig = None
+    mouse = None
+    Desktop = None
+    WindowSpecification = None
+    SystemSettings = None 
 ##########################################################################################
 
 #各种UI实例化

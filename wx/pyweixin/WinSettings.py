@@ -29,14 +29,25 @@ Examples:
 
 '''
 import os
+import sys
 import shutil
 import ctypes
-import win32com.client
-import win32clipboard
-import ctypes
-from ctypes import cast, POINTER
-from comtypes import CLSCTX_ALL
-from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+
+# Windows 专用依赖，非 Windows 平台设为 None
+if sys.platform == 'win32':
+    import win32com.client
+    import win32clipboard
+    from ctypes import cast, POINTER
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+else:
+    win32com = None
+    win32clipboard = None
+    cast = None
+    POINTER = None
+    CLSCTX_ALL = None
+    AudioUtilities = None
+    IAudioEndpointVolume = None
 
 #常量
 ES_DISPLAY_REQUIRED=0x00000002

@@ -18,6 +18,10 @@ from typing import Callable, Optional
 
 from core.config import DATA_DIR
 
+# 微信自动化仅在 Windows 上可用
+if sys.platform != 'win32':
+    raise ImportError("wechat_bot 仅支持 Windows 平台")
+
 # 将 wx 目录加入 sys.path 以便导入 wechat_msg
 _WX_DIR = str(Path(__file__).resolve().parent.parent / "wx")
 if _WX_DIR not in sys.path:

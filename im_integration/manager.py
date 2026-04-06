@@ -3,13 +3,20 @@ IM 集成管理器 - 统一管理 Telegram、飞书、微信等机器人
 """
 
 import asyncio
+import sys
 from typing import Optional, Callable, AsyncGenerator
 from dataclasses import dataclass
 
 from core.config import load_config
 from .telegram_bot import TelegramBot
 from .lark_bot import LarkBot
-from .wechat_bot import WeChatBot
+
+# 微信机器人仅在 Windows 上可用
+if sys.platform == 'win32':
+    from .wechat_bot import WeChatBot
+else:
+    WeChatBot = None
+
 from .evolution_v2 import evolution_manager_v2 as evolution_manager
 
 
@@ -62,9 +69,9 @@ class IMManager:
             )
             await self.lark.start()
 
-        # 微信
+        # 微信（仅 Windows 可用）
         wx_cfg = im_cfg.get("wechat", {})
-        if wx_cfg.get("enabled"):
+        if wx_cfg.get("enabled") and WeChatBot is not None:
             self.wechat = WeChatBot(
                 primary_chat=wx_cfg.get("primary_chat", ""),
                 mention_pattern=wx_cfg.get("mention_pattern", ""),

@@ -12,6 +12,7 @@ _IS_WINDOWS = platform.system() == "Windows"
 
 # ─── 全局状态（由 server.py 设置）────────────────────────────────
 _scheduler = None  # TaskScheduler 实例
+_im_manager = None  # IMManager 实例
 _current_platform = "telegram"  # 当前平台
 _current_user_id = ""          # 当前用户ID
 
@@ -20,11 +21,80 @@ def set_scheduler(scheduler):
     global _scheduler
     _scheduler = scheduler
 
+def set_im_manager(im_manager):
+    """由 server.py 调用，设置 im_manager 实例"""
+    global _im_manager
+    _im_manager = im_manager
+
 def set_current_user(platform: str, user_id: str):
     """由 chat_stream_handler 调用，设置当前用户信息"""
     global _current_platform, _current_user_id
     _current_platform = platform
     _current_user_id = user_id
+
+
+# ─── 工具注册表（供 agent_runtime 使用）────────────────────────────
+class ToolRegistry:
+    """统一工具注册表，合并内置工具、MCP 工具和 Skill 工具"""
+
+    def __init__(self):
+        self._app_state = None
+        self._platform = "web"
+
+    def init(self, app_state):
+        self._app_state = app_state
+
+    def set_platform(self, platform: str):
+        self._platform = platform
+
+    def get_all_tools(self) -> list:
+        """获取所有可用工具定义（OpenAI function-call 格式）"""
+        tools = list(BUILTIN_TOOLS)
+        # 动态添加 Skill 工具
+        if self._app_state and hasattr(self._app_state, 'skill_manager'):
+            sm = self._app_state.skill_manager
+            if sm and hasattr(sm, 'skills') and sm.skills:
+                tools.append(INVOKE_SKILL_TOOL)
+        # MCP 工具由 agent_runtime 自行合并
+        return tools
+
+    async def execute_tool(self, name: str, args: dict) -> str:
+        """执行工具（内置 + Skill）"""
+        if name == "invoke_skill":
+            if self._app_state and hasattr(self._app_state, 'skill_manager'):
+                skill_name = args.get("name", "")
+                return self._app_state.skill_manager.invoke(skill_name)
+            return "[错误] Skill 系统未初始化"
+        return await execute_builtin_tool(name, args)
+
+    def resolve_tool(self, name: str):
+        """解析工具名（用于 MCP 工具路由判断）"""
+        # 内置工具
+        for t in BUILTIN_TOOLS:
+            if t["function"]["name"] == name:
+                return {"type": "builtin", "name": name}
+        if name == "invoke_skill":
+            return {"type": "builtin", "name": name}
+        # 非内置工具视为 MCP 工具
+        return None
+
+
+_tool_registry = None  # ToolRegistry 单例
+
+
+def setup_tool_registry(app_state):
+    """由 server.py 调用，初始化工具注册表"""
+    global _tool_registry
+    _tool_registry = ToolRegistry()
+    _tool_registry.init(app_state)
+
+
+def get_tool_registry() -> ToolRegistry:
+    """获取工具注册表实例"""
+    global _tool_registry
+    if _tool_registry is None:
+        _tool_registry = ToolRegistry()
+    return _tool_registry
 
 
 # ─── Skill invocation tool (added dynamically when skills exist) ──

@@ -22,10 +22,10 @@ requests  # 飞书文件上传等 HTTP 请求
 
 # ─── 微信自动化 (wx/) ─────────────────────
 psutil>=5.9.6
-pyautogui>=0.9.54
-pycaw>=20240210
-pywin32>=308
-pywin32-ctypes>=0.2.2
-pywinauto>=0.6.8
+pyautogui>=0.9.54; sys_platform == 'win32'
+pycaw>=20240210; sys_platform == 'win32'
+pywin32>=308; sys_platform == 'win32'
+pywin32-ctypes>=0.2.2; sys_platform == 'win32'
+pywinauto>=0.6.8; sys_platform == 'win32'
 pillow>=11.1.0
 emoji>=2.14.1

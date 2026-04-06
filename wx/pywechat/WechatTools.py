@@ -36,18 +36,32 @@ message_contents,message_senders,message_types=Tools.pull_messages(friend='文�
 ############################依赖环境###########################
 import os
 import re
+import sys
 import time
-import winreg
-import win32api
-import pyautogui
-import win32gui
-import win32con
 import subprocess
-import win32com.client
 import psutil
-from pywinauto import mouse,Desktop
 from os import path
-from .WinSettings import Systemsettings 
+
+# Windows 专用依赖，非 Windows 平台设为 None
+if sys.platform == 'win32':
+    import winreg
+    import win32api
+    import pyautogui
+    import win32gui
+    import win32con
+    import win32com.client
+    from pywinauto import mouse, Desktop
+    from .WinSettings import Systemsettings
+else:
+    winreg = None
+    win32api = None
+    pyautogui = None
+    win32gui = None
+    win32con = None
+    win32com = None
+    mouse = None
+    Desktop = None
+    Systemsettings = None 
 from pywinauto.controls.uia_controls import ListItemWrapper
 from pywinauto.controls.uia_controls import ListViewWrapper
 from pywinauto import WindowSpecification
