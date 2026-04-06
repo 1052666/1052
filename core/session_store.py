@@ -9,6 +9,9 @@ Session Store - 基于 JSON 文件的会话存储
 """
 
 import json
+import os
+import tempfile
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -101,6 +104,7 @@ class SessionStore:
 
     def __init__(self):
         self._sessions: Dict[str, Session] = {}
+        self._lock = threading.Lock()
         self._load()
 
     def _session_key(self, platform: str, user_id: str) -> str:
@@ -122,33 +126,42 @@ class SessionStore:
             self._sessions = {}
 
     def _save_all(self):
-        """将所有会话写入文件"""
+        """将所有会话原子写入文件（防止崩溃或并发写导致数据损坏）"""
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         raw = {key: session.to_dict() for key, session in self._sessions.items()}
-        SESSIONS_FILE.write_text(
-            json.dumps(raw, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        json_str = json.dumps(raw, ensure_ascii=False, indent=2)
+        # 先写临时文件，再 rename — 同分区内 rename 是原子操作
+        fd, tmp_path = tempfile.mkstemp(dir=DATA_DIR, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(json_str)
+            os.replace(tmp_path, SESSIONS_FILE)
+        except Exception:
+            os.unlink(tmp_path)
+            raise
 
     def get_or_create_session(self, platform: str, user_id: str) -> Session:
         """获取已有会话，不存在则创建新的"""
         key = self._session_key(platform, user_id)
-        if key not in self._sessions:
-            self._sessions[key] = Session(platform=platform, user_id=user_id)
-        return self._sessions[key]
+        with self._lock:
+            if key not in self._sessions:
+                self._sessions[key] = Session(platform=platform, user_id=user_id)
+            return self._sessions[key]
 
     def save_session(self, session: Session):
         """保存单个会话（写入磁盘）"""
         key = self._session_key(session.platform, session.user_id)
-        self._sessions[key] = session
-        self._save_all()
+        with self._lock:
+            self._sessions[key] = session
+            self._save_all()
 
     def clear_session(self, platform: str, user_id: str):
         """清空指定会话"""
         key = self._session_key(platform, user_id)
-        if key in self._sessions:
-            del self._sessions[key]
-        self._save_all()
+        with self._lock:
+            if key in self._sessions:
+                del self._sessions[key]
+            self._save_all()
 
     def get_all_recent_messages(self, limit: int = 30) -> List[Dict]:
         """

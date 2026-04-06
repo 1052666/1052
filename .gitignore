@@ -1,0 +1,26 @@
+# 敏感配置（不入库）
+.env
+data/config.json
+data/sessions.json
+data/conversation.json
+data/conversation.json.bak
+data/logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
