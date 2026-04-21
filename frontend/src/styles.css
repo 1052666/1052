@@ -7598,7 +7598,8 @@ button.social-platform-card:hover {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  height: 300px;
+  max-height: 50vh;
+  overflow: hidden;
 }
 
 .orch-log-header {
@@ -7648,6 +7649,7 @@ button.social-platform-card:hover {
   border-radius: var(--r-sm);
   background: var(--surface-1);
   overflow: hidden;
+  cursor: pointer;
 }
 
 .orch-log-entry-header {
@@ -7656,6 +7658,7 @@ button.social-platform-card:hover {
   gap: 8px;
   padding: 8px 12px;
   background: var(--surface-0);
+  user-select: none;
 }
 
 .orch-log-status-icon {
