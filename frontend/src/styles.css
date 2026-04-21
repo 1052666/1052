@@ -7784,3 +7784,70 @@ button.social-platform-card:hover {
 @keyframes toastOut {
   to { opacity: 0; transform: translateY(-8px); }
 }
+
+/* ─── React Flow Orchestration ─── */
+
+/* Node type CSS variables — dark */
+:root {
+  --node-sql-bg: rgba(99,102,241,0.15);
+  --node-sql-border: rgba(99,102,241,0.4);
+  --node-debug-bg: rgba(245,158,11,0.15);
+  --node-debug-border: rgba(245,158,11,0.4);
+  --node-load-bg: rgba(16,185,129,0.15);
+  --node-load-border: rgba(16,185,129,0.4);
+  --node-wait-bg: rgba(100,116,139,0.15);
+  --node-wait-border: rgba(100,116,139,0.4);
+}
+
+/* Node type CSS variables — light */
+:root[data-theme="light"] {
+  --node-sql-bg: rgba(99,102,241,0.1);
+  --node-sql-border: rgba(99,102,241,0.35);
+  --node-debug-bg: rgba(245,158,11,0.1);
+  --node-debug-border: rgba(245,158,11,0.35);
+  --node-load-bg: rgba(16,185,129,0.1);
+  --node-load-border: rgba(16,185,129,0.35);
+  --node-wait-bg: rgba(100,116,139,0.1);
+  --node-wait-border: rgba(100,116,139,0.35);
+}
+
+/* Canvas */
+.orch-rf-canvas { background: var(--bg) !important; }
+.orch-rf-canvas .react-flow__pane { cursor: default; }
+
+/* Node handles */
+.orch-rf-handle {
+  width: 10px !important;
+  height: 10px !important;
+  background: var(--accent) !important;
+  border: 2px solid var(--bg) !important;
+  border-radius: 50% !important;
+}
+.orch-rf-node.selected { box-shadow: var(--accent-glow); }
+
+/* Controls */
+.orch-rf-controls {
+  background: var(--surface-1) !important;
+  border: 1px solid var(--hairline) !important;
+  border-radius: var(--r-md) !important;
+  box-shadow: var(--sh-2) !important;
+}
+.orch-rf-controls button {
+  background: transparent !important;
+  color: var(--fg-2) !important;
+  border-bottom: 1px solid var(--hairline) !important;
+}
+.orch-rf-controls button:hover { background: var(--surface-hover) !important; }
+
+/* MiniMap */
+.orch-rf-minimap {
+  background: var(--surface-1) !important;
+  border: 1px solid var(--hairline) !important;
+  border-radius: var(--r-md) !important;
+  box-shadow: var(--sh-2) !important;
+}
+
+/* React Flow overrides */
+.react-flow__attribution { display: none; }
+.react-flow__edge-path { stroke: var(--accent); stroke-width: 1.5; }
+.react-flow__connection-path { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 3; }
