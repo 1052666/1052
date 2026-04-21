@@ -7596,6 +7596,10 @@ button.social-platform-card:hover {
   border-radius: var(--r-lg);
   background: var(--surface-0);
   overflow: hidden;
+  flex-shrink: 0;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
 }
 
 .orch-log-header {
@@ -7634,8 +7638,9 @@ button.social-platform-card:hover {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 400px;
-  overflow: auto;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .orch-log-entry {
