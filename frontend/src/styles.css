@@ -7888,3 +7888,75 @@ button.social-platform-card:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* Drawer panel */
+.orch-drawer {
+  width: 320px;
+  background: var(--surface-0);
+  border-left: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  animation: orch-drawer-in 0.2s var(--ease);
+}
+@keyframes orch-drawer-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.orch-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+.orch-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.orch-drawer-footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.orch-drawer-toggle { display: flex; align-items: center; justify-content: space-between; }
+.orch-drawer-field { display: flex; flex-direction: column; gap: 3px; }
+.orch-drawer-label { color: var(--fg-3); font-size: 10px; }
+.orch-drawer-input {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 5px 8px;
+  color: var(--fg);
+  font-size: 11px;
+  width: 100%;
+  outline: none;
+}
+.orch-drawer-input:focus { border-color: var(--accent-ring); }
+.orch-drawer-select {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 5px 8px;
+  color: var(--fg);
+  font-size: 11px;
+  width: 100%;
+  outline: none;
+}
+.orch-drawer-select:focus { border-color: var(--accent-ring); }
+.orch-drawer-textarea {
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 6px 8px;
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-size: 10px;
+  width: 100%;
+  resize: vertical;
+  outline: none;
+  min-height: 60px;
+}
+.orch-drawer-textarea:focus { border-color: var(--accent-ring); }
