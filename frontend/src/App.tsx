@@ -18,6 +18,8 @@ import SqlFiles from './pages/SqlFiles'
 import SqlVariables from './pages/SqlVariables'
 import SqlOrchestration from './pages/SqlOrchestration'
 import SqlLoads from './pages/SqlLoads'
+import SqlServers from './pages/SqlServers'
+import SqlShellFiles from './pages/SqlShellFiles'
 
 export default function App() {
   return (
@@ -43,6 +45,8 @@ export default function App() {
           <Route path="/sql/variables" element={<SqlVariables />} />
           <Route path="/sql/orchestration" element={<SqlOrchestration />} />
           <Route path="/sql/loads" element={<SqlLoads />} />
+          <Route path="/sql/servers" element={<SqlServers />} />
+          <Route path="/sql/shell-files" element={<SqlShellFiles />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/search-sources" element={<SearchSources />} />
           <Route path="/skills" element={<Skills />} />

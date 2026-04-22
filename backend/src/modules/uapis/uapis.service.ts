@@ -178,7 +178,7 @@ export async function formatUapisRuntimeContext() {
     `- 调用模式：${catalog.provider.apiKeyMode === 'api-key' ? 'API Key 模式，后端会自动携带 Authorization Bearer' : '免费 IP 额度模式，不携带 API Key'}`,
     `- 额度说明：未登录未注册每 IP 每月约 ${catalog.provider.freeQuota.anonymousMonthlyCredits} 积分；填写免费账号 API Key 后约 ${catalog.provider.freeQuota.apiKeyMonthlyCredits} 积分。`,
     `- 文档标称接口：${catalog.provider.declaredTotal}；当前可明确调用接口：${catalog.provider.explicitTotal}；已启用：${catalog.counts.enabled}；已禁用：${catalog.counts.disabled}。`,
-    '- 使用方式：先用 uapis_list_apis 查看可用索引；需要参数说明时用 uapis_read_api；真正调用时用 uapis_call。',
+    '- 使用方式（必须按顺序）：1) uapis_list_apis 查看索引 → 2) uapis_read_api 查看参数和调用方式 → 3) uapis_call 调用。跳过第 2 步会导致参数遗漏或传错位置。',
     '- 如果某个 API 被用户禁用，不要调用它；如果用户要管理启用状态，让用户在前端工具箱操作。',
   ]
 

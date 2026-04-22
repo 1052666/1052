@@ -7,6 +7,8 @@ import {
   IconDatabase,
   IconLoad,
   IconOrchestration,
+  IconServer,
+  IconShell,
   IconSqlFile,
   IconVariable,
 } from '../components/Icons'
@@ -17,6 +19,8 @@ type WorkbenchStats = {
   variables: number
   orchestrations: number
   loads: number
+  servers: number
+  shellFiles: number
 }
 
 const MODULES = [
@@ -68,6 +72,24 @@ const MODULES = [
     statKey: 'loads' as const,
     statLabel: '个加载任务',
   },
+  {
+    to: '/sql/servers',
+    title: '服务器',
+    kicker: 'Servers',
+    description: '管理 SSH 远程服务器连接配置，支持密码和密钥认证。',
+    Icon: IconServer,
+    statKey: 'servers' as const,
+    statLabel: '台服务器',
+  },
+  {
+    to: '/sql/shell-files',
+    title: 'Shell 脚本',
+    kicker: 'Scripts',
+    description: '编写和管理 Shell 脚本，指定目标服务器执行命令。',
+    Icon: IconShell,
+    statKey: 'shellFiles' as const,
+    statLabel: '个脚本',
+  },
 ]
 
 export default function SqlWorkbench() {
@@ -78,6 +100,8 @@ export default function SqlWorkbench() {
     variables: 0,
     orchestrations: 0,
     loads: 0,
+    servers: 0,
+    shellFiles: 0,
   })
   const [loading, setLoading] = useState(true)
 
@@ -88,8 +112,10 @@ export default function SqlWorkbench() {
       SqlApi.listSqlFiles(),
       SqlApi.listVariables(),
       OrchestrationApi.list(),
+      SqlApi.listServers(),
+      SqlApi.listShellFiles(),
     ])
-      .then(([datasources, files, variables, orchestrations]) => {
+      .then(([datasources, files, variables, orchestrations, serversResp, shellFilesResp]) => {
         if (cancelled) return
         const orchestrationItems =
           orchestrations.status === 'fulfilled' ? orchestrations.value : []
@@ -101,6 +127,8 @@ export default function SqlWorkbench() {
           loads: orchestrationItems.filter((item) =>
             item.nodes.some((node) => node.type === 'load'),
           ).length,
+          servers: serversResp.status === 'fulfilled' ? serversResp.value.length : 0,
+          shellFiles: shellFilesResp.status === 'fulfilled' ? shellFilesResp.value.length : 0,
         })
       })
       .finally(() => {
@@ -117,7 +145,9 @@ export default function SqlWorkbench() {
       stats.files +
       stats.variables +
       stats.orchestrations +
-      stats.loads,
+      stats.loads +
+      stats.servers +
+      stats.shellFiles,
     [stats],
   )
 

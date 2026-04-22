@@ -1,21 +1,25 @@
 import type { OrchestrationNode } from '../../../api/orchestration'
-import type { DataSource, SqlFile } from '../../../api/sql'
+import type { DataSource, SqlFile, Server, ShellFile } from '../../../api/sql'
 import { SqlNodeConfig } from './SqlNodeConfig'
 import { DebugNodeConfig } from './DebugNodeConfig'
 import { LoadNodeConfig } from './LoadNodeConfig'
 import { WaitNodeConfig } from './WaitNodeConfig'
+import { ShellNodeConfig } from './ShellNodeConfig'
 
 const TYPE_CONFIG: Record<string, { label: string; icon: string; iconBg: string }> = {
   sql:   { label: 'SQL',   icon: 'S', iconBg: '#6366f1' },
   debug: { label: 'Debug', icon: 'D', iconBg: '#f59e0b' },
   load:  { label: '加载',  icon: 'L', iconBg: '#10b981' },
   wait:  { label: 'Wait',  icon: 'W', iconBg: '#64748b' },
+  shell: { label: 'Shell', icon: 'H', iconBg: '#e11d48' },
 }
 
 export function NodeConfigDrawer({
   node,
   datasources,
   sqlFiles,
+  servers,
+  shellFiles,
   onChange,
   onEnableToggle,
   onDelete,
@@ -24,6 +28,8 @@ export function NodeConfigDrawer({
   node: OrchestrationNode
   datasources: DataSource[]
   sqlFiles: SqlFile[]
+  servers: Server[]
+  shellFiles: ShellFile[]
   onChange: (updates: Partial<OrchestrationNode>) => void
   onEnableToggle: () => void
   onDelete: () => void
@@ -37,6 +43,7 @@ export function NodeConfigDrawer({
       case 'debug': return <DebugNodeConfig {...props} />
       case 'load':  return <LoadNodeConfig {...props} datasources={datasources} />
       case 'wait':  return <WaitNodeConfig {...props} />
+      case 'shell': return <ShellNodeConfig node={node} servers={servers} shellFiles={shellFiles} onChange={onChange} />
       default:      return <SqlNodeConfig {...props} />
     }
   }

@@ -13,6 +13,7 @@ import { SqlNode } from './nodes/SqlNode'
 import { DebugNode } from './nodes/DebugNode'
 import { LoadNode } from './nodes/LoadNode'
 import { WaitNode } from './nodes/WaitNode'
+import { ShellNode } from './nodes/ShellNode'
 import { CustomEdge } from './edges/CustomEdge'
 import { CustomConnectionLine } from './edges/CustomConnectionLine'
 import { useOrchestrationEditor } from './hooks/useOrchestrationEditor'
@@ -23,6 +24,7 @@ const nodeTypes = {
   debug: DebugNode,
   load: LoadNode,
   wait: WaitNode,
+  shell: ShellNode,
 }
 
 const edgeTypes = { custom: CustomEdge }

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { OrchestrationApi, type Orchestration, type OrchestrationNode, type OrchestrationExecution } from '../api/orchestration'
-import { SqlApi, type DataSource, type SqlFile } from '../api/sql'
+import { SqlApi, type DataSource, type SqlFile, type Server, type ShellFile } from '../api/sql'
 import { FlowEditor } from '../components/orchestration/FlowEditor'
 import { useOrchestrationEditor, type OrchNodeType } from '../components/orchestration/hooks/useOrchestrationEditor'
 import { useAutoLayout } from '../components/orchestration/hooks/useAutoLayout'
@@ -16,6 +16,8 @@ export default function SqlOrchestration() {
   const [orchestrations, setOrchestrations] = useState<Orchestration[]>([])
   const [datasources, setDatasources] = useState<DataSource[]>([])
   const [sqlFiles, setSqlFiles] = useState<SqlFile[]>([])
+  const [servers, setServers] = useState<Server[]>([])
+  const [shellFileList, setShellFileList] = useState<ShellFile[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Orchestration | null>(null)
   const [saving, setSaving] = useState(false)
@@ -35,8 +37,8 @@ export default function SqlOrchestration() {
 
   const load = async () => {
     try {
-      const [orchs, ds, files] = await Promise.all([OrchestrationApi.list(), SqlApi.listDataSources(), SqlApi.listSqlFiles()])
-      setOrchestrations(orchs); setDatasources(ds); setSqlFiles(files)
+      const [orchs, ds, files, srvs, shFiles] = await Promise.all([OrchestrationApi.list(), SqlApi.listDataSources(), SqlApi.listSqlFiles(), SqlApi.listServers(), SqlApi.listShellFiles()])
+      setOrchestrations(orchs); setDatasources(ds); setSqlFiles(files); setServers(srvs); setShellFileList(shFiles)
     } catch { setError('加载数据失败') }
     finally { setLoading(false) }
   }
@@ -114,6 +116,7 @@ export default function SqlOrchestration() {
     { label: '添加 Debug 节点', action: 'add-debug' },
     { label: '添加 Load 节点', action: 'add-load' },
     { label: '添加 Wait 节点', action: 'add-wait' },
+    { label: '添加 Shell 节点', action: 'add-shell' },
     { label: '自动布局', action: 'auto-layout' },
   ]
 
@@ -197,6 +200,8 @@ export default function SqlOrchestration() {
             node={selectedNode}
             datasources={datasources}
             sqlFiles={sqlFiles}
+            servers={servers}
+            shellFiles={shellFileList}
             onChange={(updates) => editorHook.updateNodeData(selectedNodeId!, updates)}
             onEnableToggle={() => editorHook.updateNodeData(selectedNodeId!, { enabled: !selectedNode.enabled })}
             onDelete={() => { editorHook.removeNode(selectedNodeId!); setSelectedNodeId(null) }}
