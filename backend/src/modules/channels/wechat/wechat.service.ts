@@ -628,6 +628,8 @@ async function handleInboundWechatMessage(
 
   const effectiveContent = command?.mode === 'prompt' ? command.promptText : content
 
+  await markSeenWechatMessage(seenKey)
+
   const userMessage = await appendChatMessage({
     role: 'user',
     content: effectiveContent,
