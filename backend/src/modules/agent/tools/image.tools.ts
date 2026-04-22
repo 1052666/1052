@@ -45,6 +45,11 @@ export const imageTools: AgentTool[] = [
       required: ['prompt'],
       additionalProperties: false,
     },
-    execute: async (args) => generateImages((args ?? {}) as Record<string, unknown>),
+    execute: async (args) => {
+      const input = (args ?? {}) as Record<string, unknown>
+      if (typeof input.count === 'number') input.count = Math.min(Math.max(input.count, 1), 4)
+      if (typeof input.outputCompression === 'number') input.outputCompression = Math.min(Math.max(input.outputCompression, 0), 100)
+      return generateImages(input)
+    },
   },
 ]

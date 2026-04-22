@@ -45,7 +45,7 @@ export const terminalTools: AgentTool[] = [
         command: String(input.command ?? ''),
         shell: input.shell === 'cmd' ? 'cmd' : 'powershell',
         cwd: typeof input.cwd === 'string' ? input.cwd : undefined,
-        timeoutMs: typeof input.timeoutMs === 'number' ? input.timeoutMs : undefined,
+        timeoutMs: typeof input.timeoutMs === 'number' ? Math.min(Math.max(input.timeoutMs, 1000), 1800000) : undefined,
         confirmed: input.confirmed === true ? true : undefined,
       })
     },

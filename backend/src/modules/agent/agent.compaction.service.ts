@@ -242,10 +242,11 @@ export async function compactChatHistory(inputMessages?: unknown): Promise<
   const lastUserCompact = [...messages]
     .reverse()
     .find((message) => message.role === 'user' && message.content.trim() === '/compact')
+  const maxId = messages.reduce((max, message) => Math.max(max, message.id), 0)
   const compactRequest =
     lastUserCompact ??
     ({
-      id: 1,
+      id: maxId + 1,
       role: 'user',
       content: '/compact',
       ts: Date.now(),

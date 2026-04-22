@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import unzipper from 'unzipper'
 import { config } from '../../config.js'
 import { HttpError } from '../../http-error.js'
@@ -17,6 +18,11 @@ import type {
 
 const SKILLS_DIR = 'skills'
 const SKILL_FILE = 'SKILL.md'
+const BUNDLED_SKILLS_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../builtin-skills',
+)
+const BUNDLED_SEED_STATE_FILE = '.bundled-seeded.json'
 const MAX_SKILL_CHARS = 80_000
 const SKILLS_SH = 'https://skills.sh'
 const DEFAULT_MARKETPLACE_FILE_LIMIT = 1000
@@ -107,10 +113,18 @@ type MarketplaceFile = {
   size: number
 }
 
+type BundledSeedState = {
+  installedIds: string[]
+}
+
 const marketplaceIndexCache = new Map<string, { expiresAt: number; index: RepositoryArchiveIndex }>()
 
 function skillsRoot() {
   return path.join(config.dataDir, SKILLS_DIR)
+}
+
+function bundledSeedStatePath() {
+  return path.join(skillsRoot(), BUNDLED_SEED_STATE_FILE)
 }
 
 function normalizeId(value: string) {
@@ -255,6 +269,33 @@ async function ensureSkillsRoot() {
   await fs.mkdir(skillsRoot(), { recursive: true })
 }
 
+async function readBundledSeedState(): Promise<Set<string>> {
+  const raw = await fs
+    .readFile(bundledSeedStatePath(), 'utf-8')
+    .then((content) => JSON.parse(content) as Partial<BundledSeedState>)
+    .catch(() => null)
+  const installedIds = Array.isArray(raw?.installedIds)
+    ? raw.installedIds
+        .map((id) => (typeof id === 'string' ? id.trim() : ''))
+        .filter(Boolean)
+    : []
+  return new Set(installedIds)
+}
+
+async function writeBundledSeedState(installedIds: Set<string>) {
+  await fs.writeFile(
+    bundledSeedStatePath(),
+    JSON.stringify(
+      {
+        installedIds: [...installedIds].sort((a, b) => a.localeCompare(b, 'zh-CN')),
+      } satisfies BundledSeedState,
+      null,
+      2,
+    ),
+    'utf-8',
+  )
+}
+
 async function resetDir(target: string) {
   await fs.rm(target, { recursive: true, force: true })
   await fs.mkdir(target, { recursive: true })
@@ -382,6 +423,58 @@ export async function listSkills() {
   return items
     .filter((item): item is SkillItem => item !== null)
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+}
+
+export async function ensureBundledSkillsInstalled() {
+  await ensureSkillsRoot()
+  const bundledEntries = await fs
+    .readdir(BUNDLED_SKILLS_DIR, { withFileTypes: true })
+    .catch(() => [])
+  if (bundledEntries.length === 0) {
+    return { installed: [] as string[], skipped: [] as string[] }
+  }
+
+  const seededIds = await readBundledSeedState()
+  const installed: string[] = []
+  const skipped: string[] = []
+  let stateChanged = false
+
+  for (const entry of bundledEntries) {
+    if (!entry.isDirectory()) continue
+    const id = normalizeId(entry.name)
+    const sourceDir = path.join(BUNDLED_SKILLS_DIR, entry.name)
+    const sourceSkillFile = path.join(sourceDir, SKILL_FILE)
+    if (!(await fileExists(sourceSkillFile))) continue
+    if (seededIds.has(id)) {
+      skipped.push(id)
+      continue
+    }
+
+    const targetDir = skillDir(id)
+    const targetSkillFile = path.join(targetDir, SKILL_FILE)
+    if (await fileExists(targetSkillFile)) {
+      seededIds.add(id)
+      skipped.push(id)
+      stateChanged = true
+      continue
+    }
+
+    await fs.mkdir(path.dirname(targetDir), { recursive: true })
+    await fs.cp(sourceDir, targetDir, {
+      recursive: true,
+      force: false,
+      errorOnExist: true,
+    })
+    seededIds.add(id)
+    installed.push(id)
+    stateChanged = true
+  }
+
+  if (stateChanged) {
+    await writeBundledSeedState(seededIds)
+  }
+
+  return { installed, skipped }
 }
 
 export async function getEnabledSkillIndex() {

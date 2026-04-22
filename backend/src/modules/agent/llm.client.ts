@@ -499,7 +499,7 @@ export async function* chatCompletionStream(
 
     const rest = decoder.decode()
     if (rest) buffer += rest
-    if (buffer.trim()) {
+    if (buffer.trim() && !done) {
       yield* handleEvent(buffer)
     }
   } catch (e) {

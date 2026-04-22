@@ -38,7 +38,8 @@ export const resourcesTools: AgentTool[] = [
     },
     execute: async (args) => {
       const input = (args ?? {}) as Record<string, unknown>
-      const items = await listResources(input.query, input.status, input.limit)
+      const clampedLimit = typeof input.limit === 'number' ? Math.min(Math.max(input.limit, 1), 500) : undefined
+      const items = await listResources(input.query, input.status, clampedLimit)
       return {
         query: normalizeText(input.query),
         count: items.length,

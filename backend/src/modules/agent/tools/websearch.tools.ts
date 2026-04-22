@@ -133,7 +133,7 @@ export const websearchTools: AgentTool[] = [
           input.intent === 'knowledge'
             ? input.intent
             : undefined,
-        limit: typeof input.limit === 'number' ? input.limit : undefined,
+        limit: typeof input.limit === 'number' ? Math.min(Math.max(input.limit, 1), 30) : undefined,
       })
     },
   },
