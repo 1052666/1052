@@ -517,7 +517,8 @@ export async function startWechatAccount(accountIdInput: unknown) {
       const handle = scheduleReconnect(
         async () => {
           const acc = await loadWechatAccount(account.accountId)
-          if (!acc?.token || !acc.enabled) return false
+          if (!acc?.token) return false
+          if (!acc.enabled) return true // disabled — user stopped it, not a failure
           const existing = monitors.get(acc.accountId)
           if (existing?.running) return true
           await startWechatAccount(acc.accountId)

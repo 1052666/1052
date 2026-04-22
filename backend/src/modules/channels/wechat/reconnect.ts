@@ -1,11 +1,3 @@
-/*
- * Integration plan:
- * The current WeChat module retries `monitorWechatAccount()` internally, but it does not expose an
- * append-only reconnect or session-failure hook. When that hook exists, call `scheduleReconnect()`
- * from the monitor failure path to restart the account runtime after token/session errors.
- */
-import type { ReconnectEvent } from './reconnect.types.js'
-
 const DEFAULT_INITIAL_MS = 5_000
 const DEFAULT_MAX_MS = 3_600_000
 const FIXED_DELAYS_MS: readonly number[] = [5_000, 10_000, 30_000, 60_000, 120_000]
@@ -14,7 +6,7 @@ export interface ReconnectOptions {
   initialMs?: number
   maxMs?: number
   maxAttempts?: number
-  onEvent?: (e: ReconnectEvent) => void
+  onEvent?: (event: import('./reconnect.types.js').ReconnectEvent) => void
 }
 
 export interface ReconnectHandle {
@@ -65,6 +57,15 @@ async function sleep(ms: number, signal: AbortSignal) {
   })
 }
 
+/**
+ * Retries are only for unexpected monitor exits; token-expired detection should not call this
+ * directly.
+ *
+ * Backoff uses 5s, 10s, 30s, 60s, 120s, then doubles from 120s until `maxMs`.
+ *
+ * `cancel()` aborts the pending wait or stops after the current attempt finishes. It does not
+ * interrupt an in-flight task body.
+ */
 export function scheduleReconnect(
   task: () => Promise<boolean>,
   opts: ReconnectOptions = {},
@@ -74,10 +75,6 @@ export function scheduleReconnect(
   const maxMs = Math.max(sanitizeDelay(opts.maxMs, DEFAULT_MAX_MS), 1)
   const maxAttempts = sanitizeAttempts(opts.maxAttempts)
   let attempts = 0
-
-  const emit = (event: ReconnectEvent) => {
-    opts.onEvent?.(event)
-  }
 
   const run = async () => {
     while (!controller.signal.aborted) {
@@ -92,7 +89,7 @@ export function scheduleReconnect(
       if (controller.signal.aborted) return
 
       attempts = nextAttempt
-      emit({ type: 'started', attempt: attempts, timestamp: Date.now() })
+      opts.onEvent?.({ type: 'started', attempt: attempts, timestamp: Date.now() })
 
       let succeeded = false
       let errorText: string | undefined
@@ -104,14 +101,14 @@ export function scheduleReconnect(
       if (controller.signal.aborted) return
 
       if (succeeded) {
-        emit({ type: 'success', attempt: attempts, timestamp: Date.now() })
+        opts.onEvent?.({ type: 'success', attempt: attempts, timestamp: Date.now() })
         controller.abort()
         return
       }
 
       const exhausted = maxAttempts !== undefined && attempts >= maxAttempts
       const nextDelayMs = exhausted ? undefined : resolveDelayMs(attempts + 1, initialMs, maxMs)
-      emit({
+      opts.onEvent?.({
         type: 'failed',
         attempt: attempts,
         nextDelayMs,
@@ -120,7 +117,7 @@ export function scheduleReconnect(
       })
 
       if (exhausted) {
-        emit({
+        opts.onEvent?.({
           type: 'giving-up',
           attempt: attempts,
           timestamp: Date.now(),
