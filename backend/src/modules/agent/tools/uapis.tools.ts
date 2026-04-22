@@ -55,7 +55,7 @@ export const uapisTools: AgentTool[] = [
   {
     name: 'uapis_read_api',
     description:
-      'Read detailed documentation for one UAPIs API, including parameters and examples. Read-only.',
+      'Read detailed documentation for one UAPIs API, including parameters, their types, and whether they are required. Always call this before uapis_call to learn how to pass parameters correctly.',
     parameters: {
       type: 'object',
       properties: {
@@ -66,7 +66,34 @@ export const uapisTools: AgentTool[] = [
     },
     execute: async (args) => {
       const input = (args ?? {}) as Record<string, unknown>
-      return readUapisApi(input.apiId)
+      const api = await readUapisApi(input.apiId)
+      const required = api.params.filter((p) => p.required)
+      const optional = api.params.filter((p) => !p.required)
+      const paramTarget = api.method === 'POST' ? 'body' : 'params'
+      const lines = [
+        `API: ${api.name} (${api.id})`,
+        `Method: ${api.method}  Path: ${api.path}`,
+        `Description: ${api.description}`,
+        '',
+        required.length > 0
+          ? `Required params (pass these in uapis_call.${paramTarget}): ${required.map((p) => `${p.name}: ${p.type} - ${p.description}`).join('; ')}`
+          : 'No required params.',
+      ]
+      if (optional.length > 0) {
+        lines.push(
+          `Optional params (pass in uapis_call.${paramTarget}): ${optional.map((p) => `${p.name}: ${p.type} - ${p.description}`).join('; ')}`,
+        )
+      }
+      if (api.method === 'POST' && api.bodyExample) {
+        lines.push(`Body example: ${api.bodyExample}`)
+      }
+      lines.push('')
+      lines.push(`When calling uapis_call, pass all parameters in the "${paramTarget}" field.`)
+      if (api.documentation) {
+        lines.push('')
+        lines.push(api.documentation)
+      }
+      return { ...api, _agentHint: lines.join('\n') }
     },
   },
   {
@@ -114,7 +141,7 @@ export const uapisTools: AgentTool[] = [
   {
     name: 'uapis_call',
     description:
-      'Call one enabled UAPIs API. API Key is optional: the backend omits Authorization by default and automatically adds Bearer API Key only when the user configured one in Settings. This consumes UAPIs free/API-key quota.',
+      'Call one enabled UAPIs API. IMPORTANT: you MUST call uapis_read_api first to check required params and their types. For GET APIs, pass all params in the "params" object; for POST APIs, pass body params in "body" and query params in "params". API Key is optional: the backend adds Bearer API Key only when configured in Settings. This consumes quota.',
     parameters: {
       type: 'object',
       properties: {

@@ -14,6 +14,16 @@ import {
   createVariable,
   updateVariable,
   deleteVariable,
+  listServers,
+  createServer,
+  updateServer,
+  deleteServer,
+  testServer,
+  listShellFiles,
+  createShellFile,
+  updateShellFile,
+  deleteShellFile,
+  executeShellFile,
 } from './sql.service.js'
 
 export const sqlRouter: Router = Router()
@@ -133,6 +143,90 @@ sqlRouter.put('/variables/:id', async (req, res, next) => {
 sqlRouter.delete('/variables/:id', async (req, res, next) => {
   try {
     res.json(await deleteVariable(req.params.id))
+  } catch (e) {
+    next(e)
+  }
+})
+
+// ─── Servers ──────────────────────────────────────────────
+
+sqlRouter.get('/servers', async (_req, res, next) => {
+  try {
+    res.json(await listServers())
+  } catch (e) {
+    next(e)
+  }
+})
+
+sqlRouter.post('/servers', async (req, res, next) => {
+  try {
+    res.status(201).json(await createServer(req.body ?? {}))
+  } catch (e) {
+    next(e)
+  }
+})
+
+sqlRouter.put('/servers/:id', async (req, res, next) => {
+  try {
+    res.json(await updateServer(req.params.id, req.body ?? {}))
+  } catch (e) {
+    next(e)
+  }
+})
+
+sqlRouter.delete('/servers/:id', async (req, res, next) => {
+  try {
+    res.json(await deleteServer(req.params.id))
+  } catch (e) {
+    next(e)
+  }
+})
+
+sqlRouter.post('/servers/:id/test', async (req, res, next) => {
+  try {
+    res.json(await testServer(req.params.id))
+  } catch (e) {
+    next(e)
+  }
+})
+
+// ─── Shell Files ──────────────────────────────────────────
+
+sqlRouter.get('/shell-files', async (_req, res, next) => {
+  try {
+    res.json(await listShellFiles())
+  } catch (e) {
+    next(e)
+  }
+})
+
+sqlRouter.post('/shell-files', async (req, res, next) => {
+  try {
+    res.status(201).json(await createShellFile(req.body ?? {}))
+  } catch (e) {
+    next(e)
+  }
+})
+
+sqlRouter.put('/shell-files/:id', async (req, res, next) => {
+  try {
+    res.json(await updateShellFile(req.params.id, req.body ?? {}))
+  } catch (e) {
+    next(e)
+  }
+})
+
+sqlRouter.delete('/shell-files/:id', async (req, res, next) => {
+  try {
+    res.json(await deleteShellFile(req.params.id))
+  } catch (e) {
+    next(e)
+  }
+})
+
+sqlRouter.post('/shell-files/:id/execute', async (req, res, next) => {
+  try {
+    res.json(await executeShellFile(req.params.id))
   } catch (e) {
     next(e)
   }

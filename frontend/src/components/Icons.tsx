@@ -240,3 +240,19 @@ export const IconStop = (p: Props) => (
     <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none" />
   </svg>
 )
+
+export const IconServer = (p: Props) => (
+  <svg {...base(p)}>
+    <rect x="2" y="2" width="20" height="8" rx="2" />
+    <rect x="2" y="14" width="20" height="8" rx="2" />
+    <circle cx="6" cy="6" r="1" fill="currentColor" stroke="none" />
+    <circle cx="6" cy="18" r="1" fill="currentColor" stroke="none" />
+  </svg>
+)
+
+export const IconShell = (p: Props) => (
+  <svg {...base(p)}>
+    <polyline points="4 17 10 11 4 5" />
+    <line x1="12" y1="19" x2="20" y2="19" />
+  </svg>
+)
