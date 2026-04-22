@@ -2,6 +2,7 @@ import {
   aggregateSearch,
   listSearchEngines,
   readWebPage,
+  setSearchSourceEnabled,
 } from '../../websearch/websearch.service.js'
 import type { AgentTool } from '../agent.tool.types.js'
 
@@ -16,8 +17,41 @@ export const websearchTools: AgentTool[] = [
     },
     execute: async () => {
       return {
-        engines: listSearchEngines(),
+        engines: await listSearchEngines(),
       }
+    },
+  },
+  {
+    name: 'websearch_set_source_enabled',
+    description:
+      'Enable or disable one search source. This is a configuration change and affects future web search or skill-marketplace usage.',
+    parameters: {
+      type: 'object',
+      properties: {
+        family: {
+          type: 'string',
+          enum: ['web-search', 'skill-marketplace', 'uapis'],
+          description: 'Search source family.',
+        },
+        id: {
+          type: 'string',
+          description: 'Search source id.',
+        },
+        enabled: {
+          type: 'boolean',
+          description: 'true to enable, false to disable.',
+        },
+      },
+      required: ['family', 'id', 'enabled'],
+      additionalProperties: false,
+    },
+    execute: async (args) => {
+      const input = (args ?? {}) as Record<string, unknown>
+      return setSearchSourceEnabled({
+        family: String(input.family ?? '') as 'web-search' | 'skill-marketplace' | 'uapis',
+        id: String(input.id ?? ''),
+        enabled: input.enabled as boolean,
+      })
     },
   },
   {

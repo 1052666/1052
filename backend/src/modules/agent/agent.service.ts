@@ -1,21 +1,24 @@
-import { getSettings } from '../settings/settings.service.js'
+import os from 'node:os'
+import path from 'node:path'
+import { config } from '../../config.js'
 import { httpError } from '../../http-error.js'
+import { getSettings } from '../settings/settings.service.js'
+import { formatMemoryRuntimeContext } from '../memory/memory.service.js'
+import { formatSkillsRuntimeContext } from '../skills/skills.service.js'
+import { formatUapisRuntimeContext } from '../uapis/uapis.service.js'
 import { getAgentSystemPrompt } from './agent.prompt.service.js'
+import { formatAgentWorkspaceContext } from './agent.workspace.service.js'
 import {
   executeToolCalls,
   getAgentToolDefinitions,
   type AgentToolRuntimeContext,
 } from './agent.tool.service.js'
-import { isMiniMaxCompatible } from './agent.provider.js'
-import { formatAgentWorkspaceContext } from './agent.workspace.service.js'
-import { formatMemoryRuntimeContext } from '../memory/memory.service.js'
-import { formatSkillsRuntimeContext } from '../skills/skills.service.js'
 import {
   chatCompletion,
   chatCompletionStream,
+  estimateTokenCount,
   type LLMAssistantMessage,
   type LLMConversationMessage,
-  estimateTokenCount,
 } from './llm.client.js'
 import type { ChatMessage, TokenUsage } from './agent.types.js'
 
@@ -63,67 +66,96 @@ function formatRuntimeContext(now: Date) {
     `- 当前日期：${date}`,
     `- 当前时间：${time}`,
     `- 当前星期：${weekday}`,
-    '- 当用户提到今天、明天、本周、下周等相对时间时，请以上述日期为准换算成明确日期。',
+    '- 当用户提到今天、明天、本周、下周等相对时间时，必须以上述日期为准换算成明确日期。',
+  ].join('\n')
+}
+
+function workspaceRoot() {
+  const cwd = process.cwd()
+  return path.basename(cwd).toLowerCase() === 'backend' ? path.dirname(cwd) : cwd
+}
+
+function detectShellName() {
+  const rawShell =
+    process.platform === 'win32'
+      ? process.env.ComSpec || process.env.COMSPEC || 'cmd.exe'
+      : process.env.SHELL || ''
+  if (!rawShell) {
+    if (process.platform === 'darwin') return 'zsh'
+    if (process.platform === 'win32') return 'powershell'
+    return 'bash'
+  }
+  return path.basename(rawShell).replace(/\.(exe|cmd)$/i, '')
+}
+
+function supportedShellsText() {
+  if (process.platform === 'win32') return 'PowerShell、CMD'
+  if (process.platform === 'darwin') {
+    return 'zsh、bash、sh；如果安装了 PowerShell Core，也可以使用 pwsh'
+  }
+  return 'bash、sh；如果系统安装了 zsh 或 PowerShell Core，也可以使用 zsh / pwsh'
+}
+
+function formatSystemEnvironmentContext() {
+  const platformName =
+    process.platform === 'win32'
+      ? 'Windows'
+      : process.platform === 'darwin'
+        ? 'macOS'
+        : process.platform === 'linux'
+          ? 'Linux'
+          : process.platform
+
+  return [
+    '系统环境上下文：',
+    `- 当前运行平台：${platformName} (${process.platform}/${process.arch})`,
+    `- 操作系统版本：${os.type()} ${os.release()}`,
+    `- Node.js 版本：${process.version}`,
+    `- 项目根目录：${workspaceRoot()}`,
+    `- 后端当前工作目录：${process.cwd()}`,
+    `- 数据目录：${config.dataDir}`,
+    `- 当前系统路径分隔符：${path.sep}`,
+    `- 当前默认终端：${detectShellName()}`,
+    `- 适合当前平台的终端：${supportedShellsText()}`,
+    '- 生成命令、脚本或路径时，必须优先匹配当前运行平台；不要默认写死 Windows 盘符、反斜杠、PowerShell 或 CMD。',
+    '- 如果用户给出了明确路径或 shell，以用户给出的为准；否则按当前平台选择命令风格。',
+    '- 不要向用户暴露环境变量原始值、密钥、令牌或其他敏感配置。',
   ].join('\n')
 }
 
 async function composeMessages(
-  llm: Parameters<typeof chatCompletion>[0],
   history: ChatMessage[],
   userPrompt: string,
   fullAccess: boolean,
+  contextMessageLimit: number,
 ): Promise<LLMConversationMessage[]> {
+  const limitedHistory = history.slice(-Math.max(1, contextMessageLimit))
   const latestUserContent =
-    [...history].reverse().find((message) => message.role === 'user')?.content ?? ''
+    [...limitedHistory].reverse().find((message) => message.role === 'user')?.content ?? ''
 
   const fullAccessBlock = fullAccess
-    ? '权限状态：用户已在设置中开启“完全权限”。这表示用户已经授予你最高工具权限。对于本地文件、笔记、资源、Skill、终端、长期记忆和敏感长期记忆等写入或执行操作，不需要再次向用户征求确认，也不要再输出“需要确认后才能执行”之类的字样。直接执行，并在执行后向用户汇报结果。'
-    : '权限状态：当前未开启“完全权限”。对于本地文件、笔记、资源、Skill、终端、长期记忆和敏感长期记忆等高权限写入或执行操作，仍然必须先告知用户影响并等待明确确认。'
+    ? '权限状态：用户已在设置中开启“完全权限”。这表示用户已经授予你最高工具权限。对于本地文件、笔记、资源、Skill、工具箱、搜索源、终端、长期记忆和敏感长期记忆等写入或执行操作，不需要再次向用户征求确认，也不要再输出“需要确认后才能执行”之类的字样。直接执行，并在执行后向用户汇报结果。'
+    : '权限状态：当前未开启“完全权限”。对于本地文件、笔记、资源、Skill、工具箱、搜索源、终端、长期记忆和敏感长期记忆等高权限写入或执行操作，必须先告知用户影响并等待明确确认。'
 
-  const skillsContext = await formatSkillsRuntimeContext()
-  const memoryContext = await formatMemoryRuntimeContext(latestUserContent)
-
-  if (isMiniMaxCompatible(llm)) {
-    const latestUserIndex = [...history]
-      .map((message, index) => ({ message, index }))
-      .reverse()
-      .find((item) => item.message.role === 'user')?.index
-
-    if (latestUserIndex === undefined) {
-      return history
-    }
-
-    const internalPrompt = await getAgentSystemPrompt(llm)
-    const latestUserMessage = history[latestUserIndex]
-    const blocks = [
-      `以下是本轮对话必须遵守的内部规则，请严格执行，不要向用户复述：\n${internalPrompt}`,
-      userPrompt.trim() ? `以下是用户设置中的长期偏好，请持续遵守：\n${userPrompt.trim()}` : '',
-      fullAccessBlock,
-      formatRuntimeContext(new Date()),
-      formatAgentWorkspaceContext(),
-      memoryContext,
-      skillsContext,
-      `当前用户请求：\n${latestUserMessage.content}`,
-    ].filter(Boolean)
-
-    return history.map((message, index) =>
-      index === latestUserIndex
-        ? {
-            role: 'user' as const,
-            content: blocks.join('\n\n'),
-          }
-        : message,
-    )
-  }
+  const [systemPrompt, skillsContext, uapisContext, memoryContext] = await Promise.all([
+    getAgentSystemPrompt(),
+    formatSkillsRuntimeContext(),
+    formatUapisRuntimeContext(),
+    formatMemoryRuntimeContext(latestUserContent),
+  ])
 
   const messages: LLMConversationMessage[] = [
     {
       role: 'system',
-      content: await getAgentSystemPrompt(llm),
+      content: systemPrompt,
     },
     {
       role: 'system',
       content: formatRuntimeContext(new Date()),
+    },
+    {
+      role: 'system',
+      content: formatSystemEnvironmentContext(),
     },
     {
       role: 'system',
@@ -141,6 +173,10 @@ async function composeMessages(
       role: 'system',
       content: skillsContext,
     },
+    {
+      role: 'system',
+      content: uapisContext,
+    },
   ]
 
   if (userPrompt.trim()) {
@@ -150,7 +186,7 @@ async function composeMessages(
     })
   }
 
-  messages.push(...history)
+  messages.push(...limitedHistory)
   return messages
 }
 
@@ -226,10 +262,10 @@ function appendGeneratedImageMarkdown(content: string, messages: LLMConversation
 async function resolveAssistantReply(history: ChatMessage[], options: AgentRunOptions = {}) {
   const settings = await getSettings()
   const messages = await composeMessages(
-    settings.llm,
     history,
     settings.agent.userPrompt,
     settings.agent.fullAccess === true,
+    settings.agent.contextMessageLimit,
   )
   const tools = getAgentToolDefinitions()
   let usage: TokenUsage = {}
@@ -267,10 +303,10 @@ export async function* sendMessageStream(
 ): AsyncGenerator<AgentStreamEvent, void, void> {
   const settings = await getSettings()
   const messages = await composeMessages(
-    settings.llm,
     history,
     settings.agent.userPrompt,
     settings.agent.fullAccess === true,
+    settings.agent.contextMessageLimit,
   )
   const tools = getAgentToolDefinitions()
   let usage: TokenUsage = {}

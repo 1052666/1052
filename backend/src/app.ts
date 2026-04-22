@@ -17,6 +17,12 @@ import { wechatRouter } from './modules/channels/wechat/wechat.routes.js'
 import { sqlRouter } from './modules/sql/sql.routes.js'
 import { orchestrationRouter } from './modules/orchestration/orchestration.routes.js'
 import { wecomRouter } from './modules/channels/wecom/wecom.routes.js'
+import { uapisRouter } from './modules/uapis/uapis.routes.js'
+import {
+  feishuCardWebhookHandler,
+  feishuEventWebhookHandler,
+  feishuRouter,
+} from './modules/channels/feishu/feishu.routes.js'
 
 export function createApp(): Express {
   const app = express()
@@ -30,6 +36,10 @@ export function createApp(): Express {
   app.use(
     '/api/channels/wechat/media',
     express.static(path.join(config.dataDir, 'channels', 'wechat', 'media')),
+  )
+  app.use(
+    '/api/channels/feishu/media',
+    express.static(path.join(config.dataDir, 'channels', 'feishu', 'media')),
   )
 
   app.get('/api/health', (_req, res) => {
@@ -49,7 +59,11 @@ export function createApp(): Express {
   app.use('/api/channels/wechat', wechatRouter)
   app.use('/api/sql', sqlRouter)
   app.use('/api/orchestration', orchestrationRouter)
+  app.use('/api/uapis', uapisRouter)
   app.use('/api/channels/wecom', wecomRouter)
+  app.use('/api/channels/feishu/callbacks/events', feishuEventWebhookHandler)
+  app.use('/api/channels/feishu/callbacks/cards', feishuCardWebhookHandler)
+  app.use('/api/channels/feishu', feishuRouter)
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'Not Found' })

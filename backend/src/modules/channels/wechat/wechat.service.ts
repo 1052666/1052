@@ -5,6 +5,7 @@ import {
   getChatHistory,
   updateChatMessage,
 } from '../../agent/agent.history.service.js'
+import { resolveAgentCommand } from '../../agent/agent.command.service.js'
 import { sendMessageStream } from '../../agent/agent.service.js'
 import type { ChatMessage, StoredChatMessage, TokenUsage } from '../../agent/agent.types.js'
 import {
@@ -612,9 +613,24 @@ async function handleInboundWechatMessage(
   const content = await buildWechatInboundContent(message)
   if (!content) return
 
+  const command = await resolveAgentCommand(content)
+  if (command?.mode === 'action') {
+    const contextToken =
+      message.context_token ?? (await getWechatContextToken(account.accountId, peerId))
+    await sendWechatRichMessage({
+      account,
+      peerId,
+      text: command.responseText,
+      contextToken,
+    })
+    return
+  }
+
+  const effectiveContent = command?.mode === 'prompt' ? command.promptText : content
+
   const userMessage = await appendChatMessage({
     role: 'user',
-    content,
+    content: effectiveContent,
     ts: message.create_time_ms,
     meta: {
       source: 'wechat',

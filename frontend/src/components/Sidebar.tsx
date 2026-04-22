@@ -16,6 +16,7 @@ import {
   IconSettings,
   IconSkills,
   IconSocial,
+  IconToolbox,
 } from './Icons'
 import ProfileModal, { type Profile } from './ProfileModal'
 
@@ -28,11 +29,8 @@ const items = [
   { to: '/resources', label: '资源列表', Icon: IconResources },
   { to: '/memory', label: '记忆中心', Icon: IconMemory },
   { to: '/social-channels', label: '社交通道', Icon: IconSocial },
-  { to: '/sql/datasources', label: 'SQL 数据源', Icon: IconDatabase },
-  { to: '/sql/files', label: 'SQL 文件', Icon: IconDatabase },
-  { to: '/sql/variables', label: 'SQL 变量', Icon: IconDatabase },
-  { to: '/sql/orchestration', label: 'SQL 编排', Icon: IconDatabase },
-  { to: '/sql/loads', label: '加载任务', Icon: IconDatabase },
+  { to: '/toolbox', label: '工具箱', Icon: IconToolbox },
+  { to: '/sql', label: 'SQL 工作台', Icon: IconDatabase },
   { to: '/search-sources', label: '搜索源', Icon: IconSearchGrid },
   { to: '/skills', label: 'Skill 中心', Icon: IconSkills },
   { to: '/settings', label: '设置', Icon: IconSettings },
@@ -135,6 +133,16 @@ export default function Sidebar() {
         </nav>
 
         <div className="sidebar-spacer" />
+
+        <div className="sidebar-ribbon" aria-hidden="true">
+          <span>1052</span>
+          <i>01</i>
+          <i>02</i>
+          <i>03</i>
+          <i>04</i>
+          <i>05</i>
+          <i>06</i>
+        </div>
 
         <div className="user">
           <button

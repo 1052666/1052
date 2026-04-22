@@ -9,13 +9,16 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.61.0",
     "cors": "^2.8.5",
     "express": "^4.21.1",
+    "multer": "^2.0.2",
     "unzipper": "^0.12.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
+    "@types/multer": "^2.0.0",
     "@types/node": "^22.9.0",
     "@types/unzipper": "^0.10.11",
     "tsx": "^4.19.2",

@@ -19,7 +19,21 @@ export type PublicSettings = {
     apiKeyMask: string
   }
   appearance: { theme: 'dark' | 'light' | 'auto' }
-  agent: { streaming: boolean; userPrompt: string; fullAccess: boolean }
+  agent: {
+    streaming: boolean
+    userPrompt: string
+    fullAccess: boolean
+    contextMessageLimit: number
+  }
+  uapis: {
+    hasApiKey: boolean
+    apiKeyMask: string
+    mode: 'free-ip-quota' | 'api-key'
+    home: string
+    console: string
+    anonymousMonthlyCredits: number
+    apiKeyMonthlyCredits: number
+  }
 }
 
 export type SettingsPatch = {
@@ -36,6 +50,7 @@ export type SettingsPatch = {
   }>
   appearance?: Partial<PublicSettings['appearance']>
   agent?: Partial<PublicSettings['agent']>
+  uapis?: Partial<{ apiKey: string }>
 }
 
 export const SettingsApi = {

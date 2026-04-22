@@ -1,8 +1,8 @@
 import { api } from './client'
 
 export type SearchEngineStatus = 'stable' | 'needs_work' | 'pass'
-export type SearchSourceFamily = 'web-search' | 'skill-marketplace'
-export type SearchSourceKind = 'engine' | 'marketplace' | 'repository'
+export type SearchSourceFamily = 'web-search' | 'skill-marketplace' | 'uapis'
+export type SearchSourceKind = 'engine' | 'marketplace' | 'repository' | 'api'
 
 export type SearchEngineInfo = {
   id: string
@@ -12,6 +12,7 @@ export type SearchEngineInfo = {
   statusReason: string | null
   supportsTime: boolean
   intents: string[]
+  enabled: boolean
 }
 
 export type SearchSourceInfo = {
@@ -21,6 +22,7 @@ export type SearchSourceInfo = {
   kind: SearchSourceKind
   status: SearchEngineStatus
   statusReason: string | null
+  enabled: boolean
   homepage: string
   region: 'cn' | 'global' | 'shared' | null
   supportsTime: boolean
@@ -43,4 +45,9 @@ export type SearchSourcesResponse = {
 export const WebsearchApi = {
   listEngines: () => api.get<SearchSourcesResponse>('/websearch/engines'),
   listSources: () => api.get<SearchSourcesResponse>('/websearch/engines'),
+  setSourceEnabled: (family: SearchSourceFamily, id: string, enabled: boolean) =>
+    api.patch<SearchSourcesResponse>(
+      `/websearch/sources/${encodeURIComponent(family)}/${encodeURIComponent(id)}`,
+      { enabled },
+    ),
 }

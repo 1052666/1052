@@ -5,6 +5,7 @@ import type {
   Settings,
   PublicSettings,
   SettingsPatch,
+  UapisSettings,
 } from './settings.types.js'
 
 const FILE = 'settings.json'
@@ -32,6 +33,10 @@ const DEFAULT_SETTINGS: Settings = {
     streaming: true,
     userPrompt: '',
     fullAccess: false,
+    contextMessageLimit: 50,
+  },
+  uapis: {
+    apiKey: '',
   },
 }
 
@@ -102,6 +107,7 @@ function mergeSettings(base: Settings, partial: Partial<Settings>): Settings {
     },
     appearance: { ...base.appearance, ...(partial.appearance ?? {}) },
     agent: { ...base.agent, ...(partial.agent ?? {}) },
+    uapis: { ...base.uapis, ...(partial.uapis ?? {}) },
   }
 }
 
@@ -123,6 +129,23 @@ function normalizeAgentSettings(agent: LegacyAgentSettings | undefined): AgentSe
       typeof (agent as { fullAccess?: unknown }).fullAccess === 'boolean'
         ? Boolean((agent as { fullAccess?: unknown }).fullAccess)
         : DEFAULT_SETTINGS.agent.fullAccess,
+    contextMessageLimit:
+      typeof (agent as { contextMessageLimit?: unknown }).contextMessageLimit === 'number' &&
+      Number.isFinite((agent as { contextMessageLimit?: unknown }).contextMessageLimit)
+        ? Math.min(
+            Math.max(
+              Math.round((agent as { contextMessageLimit?: number }).contextMessageLimit ?? 50),
+              1,
+            ),
+            300,
+          )
+        : DEFAULT_SETTINGS.agent.contextMessageLimit,
+  }
+}
+
+function normalizeUapisSettings(uapis: Partial<UapisSettings> | undefined): UapisSettings {
+  return {
+    apiKey: typeof uapis?.apiKey === 'string' ? uapis.apiKey : DEFAULT_SETTINGS.uapis.apiKey,
   }
 }
 
@@ -153,6 +176,15 @@ function toPublic(settings: Settings): PublicSettings {
     },
     appearance: settings.appearance,
     agent: settings.agent,
+    uapis: {
+      hasApiKey: settings.uapis.apiKey.length > 0,
+      apiKeyMask: maskKey(settings.uapis.apiKey),
+      mode: settings.uapis.apiKey.length > 0 ? 'api-key' : 'free-ip-quota',
+      home: 'https://uapis.cn',
+      console: 'https://uapis.cn/console',
+      anonymousMonthlyCredits: 1500,
+      apiKeyMonthlyCredits: 3500,
+    },
   }
 }
 
@@ -162,6 +194,7 @@ export async function getSettings(): Promise<Settings> {
     ...raw,
     imageGeneration: normalizeImageGenerationSettings(raw.imageGeneration),
     agent: normalizeAgentSettings(raw.agent),
+    uapis: normalizeUapisSettings(raw.uapis),
   })
 }
 
@@ -198,7 +231,17 @@ export async function updateSettings(patch: SettingsPatch): Promise<PublicSettin
           : current.imageGeneration.apiKey,
     },
     appearance: { ...current.appearance, ...(patch.appearance ?? {}) },
-    agent: { ...current.agent, ...(patch.agent ?? {}) },
+    agent: normalizeAgentSettings({
+      ...current.agent,
+      ...(patch.agent ?? {}),
+    }),
+    uapis: {
+      ...current.uapis,
+      apiKey:
+        typeof patch.uapis?.apiKey === 'string' && patch.uapis.apiKey.trim().length > 0
+          ? patch.uapis.apiKey.trim()
+          : current.uapis.apiKey,
+    },
   }
 
   await writeJson(FILE, next)

@@ -9,6 +9,7 @@ import {
   sendWechatDirectMessage,
 } from '../channels/wechat/wechat.service.js'
 import type {
+  ScheduledTaskFeishuDeliveryMode,
   ScheduledTask,
   ScheduledTaskDelivery,
   ScheduledTaskInput,
@@ -82,12 +83,25 @@ function normalizeWechatDeliveryMode(
   return fallback
 }
 
+function normalizeFeishuDeliveryMode(
+  value: unknown,
+  fallback: ScheduledTaskFeishuDeliveryMode,
+): ScheduledTaskFeishuDeliveryMode {
+  if (value === 'auto' || value === 'fixed' || value === 'off') return value
+  return fallback
+}
+
 function defaultDelivery(): ScheduledTaskDelivery {
   return {
     wechat: {
       mode: 'auto',
       accountId: '',
       peerId: '',
+    },
+    feishu: {
+      mode: 'auto',
+      receiveIdType: 'chat_id',
+      receiveId: '',
     },
   }
 }
@@ -105,11 +119,25 @@ function normalizeDelivery(
     raw.wechat && typeof raw.wechat === 'object'
       ? (raw.wechat as Record<string, unknown>)
       : {}
+  const rawFeishu =
+    raw.feishu && typeof raw.feishu === 'object'
+      ? (raw.feishu as Record<string, unknown>)
+      : {}
 
   const fallbackWechat = fallback.wechat
+  const fallbackFeishu = fallback.feishu
   const accountId = toCleanString(rawWechat.accountId ?? fallbackWechat.accountId, 160)
   const peerId = toCleanString(rawWechat.peerId ?? fallbackWechat.peerId, 200)
   let mode = normalizeWechatDeliveryMode(rawWechat.mode, fallbackWechat.mode)
+  const receiveId = toCleanString(rawFeishu.receiveId ?? fallbackFeishu.receiveId, 200)
+  const receiveIdType =
+    rawFeishu.receiveIdType === 'open_id' ||
+    rawFeishu.receiveIdType === 'user_id' ||
+    rawFeishu.receiveIdType === 'union_id' ||
+    rawFeishu.receiveIdType === 'email'
+      ? rawFeishu.receiveIdType
+      : 'chat_id'
+  let feishuMode = normalizeFeishuDeliveryMode(rawFeishu.mode, fallbackFeishu.mode)
 
   if (rawWechat.mode === undefined && typeof rawWechat.enabled === 'boolean') {
     if (rawWechat.enabled === false) {
@@ -126,11 +154,31 @@ function normalizeDelivery(
     mode = 'auto'
   }
 
+  if (rawFeishu.mode === undefined && typeof rawFeishu.enabled === 'boolean') {
+    if (rawFeishu.enabled === false) {
+      feishuMode = 'off'
+    } else {
+      feishuMode = receiveId ? 'fixed' : 'auto'
+    }
+  }
+
+  if (feishuMode === 'fixed' && !receiveId) {
+    if (strict) {
+      throw new HttpError(400, 'Fixed Feishu delivery requires receiveId')
+    }
+    feishuMode = 'auto'
+  }
+
   return {
     wechat: {
       mode,
       accountId,
       peerId,
+    },
+    feishu: {
+      mode: feishuMode,
+      receiveIdType,
+      receiveId,
     },
   }
 }
@@ -246,7 +294,7 @@ async function publishScheduledTaskOutcome(
     },
   })
 
-  await createNotification({
+  const notification = await createNotification({
     title: `定时任务提醒：${task.title}`,
     message: content,
     level: outcome.status === 'success' ? 'success' : 'error',
@@ -258,6 +306,7 @@ async function publishScheduledTaskOutcome(
   })
 
   await deliverScheduledTaskToWechat(task, content, record.id)
+  await deliverScheduledTaskToFeishu(task, content, record.id, notification.id, outcome.status)
 }
 
 function deliveryErrorMessage(error: unknown) {
@@ -376,6 +425,148 @@ async function deliverScheduledTaskToWechat(
         },
       }),
       'scheduled-task-wechat-failed',
+    )
+  }
+}
+
+async function deliverScheduledTaskToFeishu(
+  task: ScheduledTask,
+  content: string,
+  chatMessageId: number,
+  notificationId: string,
+  status: 'success' | 'failed',
+) {
+  const feishu = task.delivery?.feishu ?? defaultDelivery().feishu
+  if (feishu.mode === 'off') return
+
+  const {
+    resolveFeishuDeliveryTarget,
+    sendFeishuDirectMessage,
+    sendFeishuScheduledTaskCardMessage,
+  } = await import('../channels/feishu/feishu.service.js')
+  const { loadFeishuWorkspaceConfig } = await import('../channels/feishu/feishu.store.js')
+
+  let target: Awaited<ReturnType<typeof resolveFeishuDeliveryTarget>> | null = null
+  try {
+    target = await resolveFeishuDeliveryTarget(
+      feishu.mode === 'fixed'
+        ? {
+            receiveIdType: feishu.receiveIdType,
+            receiveId: feishu.receiveId,
+          }
+        : undefined,
+    )
+  } catch (error) {
+    await updateChatMessage(
+      chatMessageId,
+      (current) => ({
+        ...current,
+        meta: {
+          ...current.meta,
+          delivery: {
+            status: 'failed',
+            targetChannel: 'feishu',
+            targetPeerId: feishu.receiveId || undefined,
+            error: deliveryErrorMessage(error),
+          },
+        },
+      }),
+      'scheduled-task-feishu-target-failed',
+    )
+    return
+  }
+
+  if (!target) {
+    const error =
+      'No Feishu delivery target is available yet. Connect Feishu and complete at least one conversation first, or set a fixed receiveId for this scheduled task.'
+    await updateChatMessage(
+      chatMessageId,
+      (current) => ({
+        ...current,
+        meta: {
+          ...current.meta,
+          delivery: {
+            status: 'failed',
+            targetChannel: 'feishu',
+            targetPeerId: feishu.receiveId || undefined,
+            error,
+          },
+        },
+      }),
+      'scheduled-task-feishu-no-target',
+    )
+    return
+  }
+
+  const workspace = await loadFeishuWorkspaceConfig()
+
+  await updateChatMessage(
+    chatMessageId,
+    (current) => ({
+      ...current,
+      meta: {
+        ...current.meta,
+        delivery: {
+          status: 'pending',
+          targetChannel: 'feishu',
+          targetPeerId: target.receiveId,
+        },
+      },
+    }),
+    'scheduled-task-feishu-pending',
+  )
+
+  try {
+    if (workspace.enableScheduledTaskCards !== false) {
+      await sendFeishuScheduledTaskCardMessage({
+        taskId: task.id,
+        taskTitle: task.title,
+        summary: content,
+        status,
+        enabled: task.enabled,
+        notificationId,
+        receiveIdType: target.receiveIdType,
+        receiveId: target.receiveId,
+      })
+    } else {
+      await sendFeishuDirectMessage({
+        receiveIdType: target.receiveIdType,
+        receiveId: target.receiveId,
+        text: content,
+      })
+    }
+
+    await updateChatMessage(
+      chatMessageId,
+      (current) => ({
+        ...current,
+        meta: {
+          ...current.meta,
+          delivery: {
+            status: 'sent',
+            targetChannel: 'feishu',
+            targetPeerId: target.receiveId,
+          },
+        },
+      }),
+      'scheduled-task-feishu-sent',
+    )
+  } catch (error) {
+    await updateChatMessage(
+      chatMessageId,
+      (current) => ({
+        ...current,
+        meta: {
+          ...current.meta,
+          delivery: {
+            status: 'failed',
+            targetChannel: 'feishu',
+            targetPeerId: target.receiveId,
+            error: deliveryErrorMessage(error),
+          },
+        },
+      }),
+      'scheduled-task-feishu-failed',
     )
   }
 }

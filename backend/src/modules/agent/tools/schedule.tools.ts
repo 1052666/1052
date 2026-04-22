@@ -43,18 +43,61 @@ function runtimeWechatSource(input: Record<string, unknown>) {
   return null
 }
 
-function withRuntimeWechatDelivery(input: Record<string, unknown>) {
+function runtimeFeishuSource(input: Record<string, unknown>) {
+  const context =
+    input.__runtimeContext && typeof input.__runtimeContext === 'object'
+      ? (input.__runtimeContext as Record<string, unknown>)
+      : null
+  const source =
+    context?.source && typeof context.source === 'object'
+      ? (context.source as Record<string, unknown>)
+      : null
+  if (
+    source?.channel === 'feishu' &&
+    typeof source.receiveIdType === 'string' &&
+    typeof source.receiveId === 'string' &&
+    source.receiveId.trim()
+  ) {
+    return {
+      receiveIdType:
+        source.receiveIdType === 'open_id' ||
+        source.receiveIdType === 'user_id' ||
+        source.receiveIdType === 'union_id' ||
+        source.receiveIdType === 'email'
+          ? source.receiveIdType
+          : 'chat_id',
+      receiveId: source.receiveId.trim(),
+    }
+  }
+  return null
+}
+
+function withRuntimeDelivery(input: Record<string, unknown>) {
   if (input.delivery !== undefined) return input
   const source = runtimeWechatSource(input)
-  if (!source) return input
+  const feishuSource = runtimeFeishuSource(input)
+  if (!source && !feishuSource) return input
   return {
     ...input,
     delivery: {
-      wechat: {
-        mode: 'fixed',
-        accountId: source.accountId,
-        peerId: source.peerId,
-      },
+      ...(source
+        ? {
+            wechat: {
+              mode: 'fixed',
+              accountId: source.accountId,
+              peerId: source.peerId,
+            },
+          }
+        : {}),
+      ...(feishuSource
+        ? {
+            feishu: {
+              mode: 'fixed',
+              receiveIdType: feishuSource.receiveIdType,
+              receiveId: feishuSource.receiveId,
+            },
+          }
+        : {}),
     },
   }
 }
@@ -109,7 +152,7 @@ export const scheduleTools: AgentTool[] = [
   {
     name: 'schedule_create_task',
     description:
-      'Create a scheduled task. Supports once, recurring, or ongoing tasks. Target can be agent or terminal. Before calling, tell the user the schedule rule and effect, then wait for explicit confirmation. If the request comes from WeChat and delivery is omitted, the task will be pinned to that WeChat conversation automatically.',
+      'Create a scheduled task. Supports once, recurring, or ongoing tasks. Target can be agent or terminal. Before calling, tell the user the schedule rule and effect, then wait for explicit confirmation. If the request comes from WeChat or Feishu and delivery is omitted, the task will be pinned to that conversation automatically.',
     parameters: {
       type: 'object',
       properties: {
@@ -133,7 +176,7 @@ export const scheduleTools: AgentTool[] = [
         delivery: {
           type: 'object',
           description:
-            'Optional delivery config. WeChat defaults to {wechat:{mode:"auto"}} and pushes results to the most recent WeChat conversation. Use mode "off" to disable, or "fixed" with accountId and peerId to pin a target.',
+            'Optional delivery config. WeChat and Feishu both support auto, fixed, or off modes.',
           properties: {
             wechat: {
               type: 'object',
@@ -141,6 +184,18 @@ export const scheduleTools: AgentTool[] = [
                 mode: { type: 'string', enum: ['auto', 'fixed', 'off'] },
                 accountId: { type: 'string' },
                 peerId: { type: 'string' },
+              },
+              additionalProperties: false,
+            },
+            feishu: {
+              type: 'object',
+              properties: {
+                mode: { type: 'string', enum: ['auto', 'fixed', 'off'] },
+                receiveIdType: {
+                  type: 'string',
+                  enum: ['chat_id', 'open_id', 'user_id', 'union_id', 'email'],
+                },
+                receiveId: { type: 'string' },
               },
               additionalProperties: false,
             },
@@ -156,7 +211,7 @@ export const scheduleTools: AgentTool[] = [
     execute: async (args) => {
       const input = (args ?? {}) as Record<string, unknown>
       assertConfirmed(input.confirmed)
-      return createScheduledTask(withRuntimeWechatDelivery(input))
+      return createScheduledTask(withRuntimeDelivery(input))
     },
   },
   {
@@ -183,7 +238,7 @@ export const scheduleTools: AgentTool[] = [
         delivery: {
           type: 'object',
           description:
-            'Optional delivery config. WeChat mode can be auto, fixed, or off.',
+            'Optional delivery config. WeChat and Feishu mode can be auto, fixed, or off.',
           properties: {
             wechat: {
               type: 'object',
@@ -191,6 +246,18 @@ export const scheduleTools: AgentTool[] = [
                 mode: { type: 'string', enum: ['auto', 'fixed', 'off'] },
                 accountId: { type: 'string' },
                 peerId: { type: 'string' },
+              },
+              additionalProperties: false,
+            },
+            feishu: {
+              type: 'object',
+              properties: {
+                mode: { type: 'string', enum: ['auto', 'fixed', 'off'] },
+                receiveIdType: {
+                  type: 'string',
+                  enum: ['chat_id', 'open_id', 'user_id', 'union_id', 'email'],
+                },
+                receiveId: { type: 'string' },
               },
               additionalProperties: false,
             },

@@ -18,6 +18,7 @@ export default function MemorySummaryPanel() {
   const [summary, setSummary] = useState<MemorySummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -61,23 +62,45 @@ export default function MemorySummaryPanel() {
   }
 
   return (
-    <section className="usage-card memory-summary-panel">
+    <section className={'usage-card memory-summary-panel' + (expanded ? ' expanded' : ' collapsed')}>
       <div className="usage-card-head">
         <div>
           <h3>长期记忆摘要</h3>
-          <p>查看 Agent 当前持久化的长期记忆、待确认建议和敏感记忆目录。</p>
+          <p>{expanded ? '查看 Agent 当前持久化的长期记忆、待确认建议和敏感记忆目录。' : '已折叠，仅保留计数摘要，展开后再渲染详细列表。'}</p>
         </div>
-        <button className="chip ghost" type="button" onClick={() => void refresh()} disabled={refreshing}>
-          <IconRefresh size={14} /> {refreshing ? '刷新中...' : '刷新'}
-        </button>
+        <div className="memory-summary-actions">
+          <button className="chip ghost" type="button" onClick={() => setExpanded((current) => !current)}>
+            {expanded ? '收起' : '展开'}
+          </button>
+          <button className="chip ghost" type="button" onClick={() => void refresh()} disabled={refreshing}>
+            <IconRefresh size={14} /> {refreshing ? '刷新中...' : '刷新'}
+          </button>
+        </div>
       </div>
 
-      {error ? <div className="banner error">{error}</div> : null}
-
-      {loading && !summary ? (
-        <div className="token-usage-loading">正在读取长期记忆摘要...</div>
-      ) : summary ? (
+      {!expanded ? (
+        <div className="memory-summary-compact">
+          {summary ? (
+            <>
+              <span>确认 {summary.counts.confirmed}</span>
+              <span>启用 {summary.counts.active}</span>
+              <span>待确认 {summary.counts.suggestions}</span>
+              <span>敏感 {summary.counts.secure}</span>
+            </>
+          ) : loading ? (
+            <span>正在读取摘要...</span>
+          ) : (
+            <span>暂无摘要</span>
+          )}
+        </div>
+      ) : (
         <>
+          {error ? <div className="banner error">{error}</div> : null}
+
+          {loading && !summary ? (
+            <div className="token-usage-loading">正在读取长期记忆摘要...</div>
+          ) : summary ? (
+            <>
           <div className="memory-summary-grid">
             <article className="memory-summary-stat">
               <span>已确认</span>
@@ -153,9 +176,11 @@ export default function MemorySummaryPanel() {
               <IconMemory size={14} /> 打开记忆中心
             </Link>
           </div>
+            </>
+          ) : (
+            <div className="memory-summary-empty">暂时没有可显示的长期记忆摘要。</div>
+          )}
         </>
-      ) : (
-        <div className="memory-summary-empty">暂时没有可显示的长期记忆摘要。</div>
       )}
     </section>
   )

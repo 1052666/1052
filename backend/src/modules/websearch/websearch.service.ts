@@ -1,4 +1,6 @@
 import { HttpError } from '../../http-error.js'
+import { readJson, writeJson } from '../../storage.js'
+import { getUapisCatalog, setUapisApiEnabled } from '../uapis/uapis.service.js'
 
 type SearchRegion = 'cn' | 'global'
 type SearchTime = 'hour' | 'day' | 'week' | 'month' | 'year'
@@ -10,9 +12,9 @@ type SearchIntent =
   | 'academic'
   | 'wechat'
   | 'knowledge'
-type SearchEngineStatus = 'stable'
-type SearchSourceFamily = 'web-search' | 'skill-marketplace'
-type SearchSourceKind = 'engine' | 'marketplace' | 'repository'
+type SearchEngineStatus = 'stable' | 'pass'
+export type SearchSourceFamily = 'web-search' | 'skill-marketplace' | 'uapis'
+type SearchSourceKind = 'engine' | 'marketplace' | 'repository' | 'api'
 
 type SearchEngine = {
   id: string
@@ -33,6 +35,7 @@ export type SearchSourceInfo = {
   kind: SearchSourceKind
   status: SearchEngineStatus
   statusReason: string | null
+  enabled: boolean
   homepage: string
   region: SearchRegion | 'shared' | null
   supportsTime: boolean
@@ -161,6 +164,95 @@ const ENGINE_MAP = new Map(ENGINES.map((engine) => [engine.id, engine]))
 const DEFAULT_LIMIT = 10
 const MAX_LIMIT = 30
 const MAX_PAGE_CHARS = 12000
+const SEARCH_SOURCES_CONFIG_FILE = 'search-sources-config.json'
+
+type SearchSourcesConfig = {
+  disabledSourceKeys: string[]
+  updatedAt: number
+}
+
+type SearchEngineInfo = {
+  id: string
+  name: string
+  region: SearchRegion
+  status: SearchEngineStatus
+  statusReason: string | null
+  supportsTime: boolean
+  intents: string[]
+  enabled: boolean
+}
+
+type SetSearchSourceEnabledInput = {
+  family: SearchSourceFamily
+  id: string
+  enabled: boolean
+}
+
+const SEARCH_SOURCE_FAMILIES: SearchSourceFamily[] = ['web-search', 'skill-marketplace', 'uapis']
+const SKILL_MARKETPLACE_SOURCE_IDS = new Set(['skills-sh', 'github-archive'])
+
+function makeSourceKey(family: SearchSourceFamily, id: string) {
+  return `${family}:${id}`
+}
+
+function defaultSearchSourcesConfig(): SearchSourcesConfig {
+  return {
+    disabledSourceKeys: [],
+    updatedAt: Date.now(),
+  }
+}
+
+function normalizeSearchSourcesConfig(
+  input: Partial<SearchSourcesConfig> | undefined,
+): SearchSourcesConfig {
+  return {
+    disabledSourceKeys: Array.isArray(input?.disabledSourceKeys)
+      ? [...new Set(input.disabledSourceKeys.filter((item): item is string => typeof item === 'string'))]
+      : [],
+    updatedAt:
+      typeof input?.updatedAt === 'number' && Number.isFinite(input.updatedAt)
+        ? input.updatedAt
+        : Date.now(),
+  }
+}
+
+async function readSearchSourcesConfig() {
+  return normalizeSearchSourcesConfig(
+    await readJson<Partial<SearchSourcesConfig>>(SEARCH_SOURCES_CONFIG_FILE, defaultSearchSourcesConfig()),
+  )
+}
+
+async function writeSearchSourcesConfig(next: SearchSourcesConfig) {
+  await writeJson(
+    SEARCH_SOURCES_CONFIG_FILE,
+    normalizeSearchSourcesConfig({
+      ...next,
+      updatedAt: Date.now(),
+    }),
+  )
+}
+
+function isSourceEnabled(config: SearchSourcesConfig, family: SearchSourceFamily, id: string) {
+  return !config.disabledSourceKeys.includes(makeSourceKey(family, id))
+}
+
+function withDisabledStatus(
+  status: SearchEngineStatus,
+  statusReason: string | undefined,
+  enabled: boolean,
+) {
+  if (enabled) {
+    return {
+      status,
+      statusReason: statusReason ?? null,
+    }
+  }
+
+  return {
+    status: 'pass' as const,
+    statusReason: 'This source is currently disabled and will not be used by the agent.',
+  }
+}
 
 function normalizeText(value: string) {
   return value.replace(/\s+/g, ' ').trim()
@@ -555,13 +647,20 @@ async function searchOneEngine(
   throw lastError instanceof Error ? lastError : new Error('搜索失败')
 }
 
-function chooseEngines(input: SearchRequest, intent: SearchIntent) {
+async function listEnabledSearchEngines() {
+  const config = await readSearchSourcesConfig()
+  return ENGINES.filter((engine) => isSourceEnabled(config, 'web-search', engine.id))
+}
+
+async function chooseEngines(input: SearchRequest, intent: SearchIntent) {
+  const enabledEngines = await listEnabledSearchEngines()
+
   if (Array.isArray(input.engines) && input.engines.length > 0) {
     const selected = input.engines
-      .map((id) => ENGINE_MAP.get(String(id).trim()))
+      .map((id) => enabledEngines.find((engine) => engine.id === String(id).trim()))
       .filter((engine): engine is SearchEngine => Boolean(engine))
     if (selected.length === 0) {
-      throw new HttpError(400, '未找到可用搜索引擎，请检查 engines 参数')
+      throw new HttpError(400, 'No enabled search engine matched the requested engine ids.')
     }
     return selected
   }
@@ -573,16 +672,19 @@ function chooseEngines(input: SearchRequest, intent: SearchIntent) {
         ? 'cn'
         : 'global'
 
-  const byIntent = ENGINES.filter(
+  const byIntent = enabledEngines.filter(
     (engine) =>
       engine.region === region &&
       (!engine.intentTags || engine.intentTags.includes(intent) || intent === 'general'),
   )
 
-  const picked = byIntent.slice(0, region === 'cn' ? 5 : 5)
+  const picked = byIntent.slice(0, 5)
   if (picked.length > 0) return picked
 
-  return ENGINES.filter((engine) => engine.region === region).slice(0, region === 'cn' ? 5 : 5)
+  const byRegion = enabledEngines.filter((engine) => engine.region === region).slice(0, 5)
+  if (byRegion.length > 0) return byRegion
+
+  throw new HttpError(400, 'No enabled search engine is currently available for this request.')
 }
 
 function aggregateAndRank(items: RawSearchItem[], limit: number): SearchItem[] {
@@ -634,31 +736,44 @@ function aggregateAndRank(items: RawSearchItem[], limit: number): SearchItem[] {
     .slice(0, limit)
 }
 
-export function listSearchEngines() {
-  return ENGINES.map((engine) => ({
-    id: engine.id,
-    name: engine.name,
-    region: engine.region,
-    status: engine.status,
-    statusReason: engine.statusReason ?? null,
-    supportsTime: engine.supportsTime === true,
-    intents: engine.intentTags ?? [],
-  }))
+export async function listSearchEngines(): Promise<SearchEngineInfo[]> {
+  const config = await readSearchSourcesConfig()
+  return ENGINES.map((engine) => {
+    const enabled = isSourceEnabled(config, 'web-search', engine.id)
+    const state = withDisabledStatus(engine.status, engine.statusReason, enabled)
+    return {
+      id: engine.id,
+      name: engine.name,
+      region: engine.region,
+      status: state.status,
+      statusReason: state.statusReason,
+      supportsTime: engine.supportsTime === true,
+      intents: engine.intentTags ?? [],
+      enabled,
+    }
+  })
 }
 
-export function listSearchSourceGroups(): SearchSourceGroup[] {
-  const webSearchItems: SearchSourceInfo[] = ENGINES.map((engine) => ({
+export async function listSearchSourceGroups(): Promise<SearchSourceGroup[]> {
+  const [config, engines, uapisCatalog] = await Promise.all([
+    readSearchSourcesConfig(),
+    listSearchEngines(),
+    getUapisCatalog(),
+  ])
+
+  const webSearchItems: SearchSourceInfo[] = engines.map((engine) => ({
     id: engine.id,
     name: engine.name,
     family: 'web-search',
     kind: 'engine',
     status: engine.status,
-    statusReason: engine.statusReason ?? null,
-    homepage: engine.homepage,
+    statusReason: engine.statusReason,
+    enabled: engine.enabled,
+    homepage: ENGINE_MAP.get(engine.id)?.homepage ?? '',
     region: engine.region,
-    supportsTime: engine.supportsTime === true,
-    intents: engine.intentTags ?? [],
-    tags: ['联网搜索', engine.region === 'cn' ? '中文' : '国际'],
+    supportsTime: engine.supportsTime,
+    intents: engine.intents,
+    tags: ['Web Search', engine.region === 'cn' ? 'Chinese' : 'Global'],
   }))
 
   const skillMarketplaceItems: SearchSourceInfo[] = [
@@ -667,43 +782,123 @@ export function listSearchSourceGroups(): SearchSourceGroup[] {
       name: 'skills.sh',
       family: 'skill-marketplace',
       kind: 'marketplace',
-      status: 'stable',
-      statusReason: 'Skill 中心通过它搜索公开 Skill 条目，并把结果展示给用户与 Agent。',
+      ...withDisabledStatus(
+        'stable',
+        'Used by the Skill Center for public skill discovery.',
+        isSourceEnabled(config, 'skill-marketplace', 'skills-sh'),
+      ),
+      enabled: isSourceEnabled(config, 'skill-marketplace', 'skills-sh'),
       homepage: SKILL_MARKETPLACE_HOME,
       region: 'shared',
       supportsTime: false,
       intents: ['skills', 'marketplace', 'discovery'],
-      tags: ['Skill 市场', '目录检索', '公开能力包'],
+      tags: ['Skill Market', 'Discovery'],
     },
     {
       id: 'github-archive',
       name: 'GitHub Archive',
       family: 'skill-marketplace',
       kind: 'repository',
-      status: 'stable',
-      statusReason: 'Skill 市场的预检、预览和安装会基于 GitHub 仓库 ZIP 归档读取真实目录与文件内容。',
+      ...withDisabledStatus(
+        'stable',
+        'Used by the Skill Center to preview and install repository-based skills.',
+        isSourceEnabled(config, 'skill-marketplace', 'github-archive'),
+      ),
+      enabled: isSourceEnabled(config, 'skill-marketplace', 'github-archive'),
       homepage: GITHUB_HOME,
       region: 'shared',
       supportsTime: false,
       intents: ['skills', 'preview', 'install'],
-      tags: ['仓库归档', '文件预检', '安装来源'],
+      tags: ['Repository', 'Preview', 'Install'],
     },
   ]
+
+  const uapisItems: SearchSourceInfo[] = uapisCatalog.apis
+    .filter((api) => api.categoryId === 'search')
+    .map((api) => ({
+      id: api.id,
+      name: api.name,
+      family: 'uapis' as const,
+      kind: 'api' as const,
+      status: api.enabled ? ('stable' as const) : ('pass' as const),
+      statusReason: api.enabled
+        ? 'This UAPIs search API is enabled and available to the agent.'
+        : 'This UAPIs search API is disabled and will not be used by the agent.',
+      enabled: api.enabled,
+      homepage: uapisCatalog.provider.home,
+      region: 'shared' as const,
+      supportsTime: false,
+      intents: ['uapis', 'search', 'aggregate'],
+      tags: [
+        'UAPIs',
+        'Search API',
+        uapisCatalog.provider.apiKeyMode === 'api-key' ? 'API Key Mode' : 'Free IP Quota',
+      ],
+    }))
 
   return [
     {
       id: 'web-search',
-      title: '联网搜索引擎',
-      description: '这些来源会直接参与 Agent 的网页聚合搜索与内容抓取。',
+      title: '联网搜索源',
+      description: '这些来源会直接参与 Agent 的网页搜索与结果聚合。',
       items: webSearchItems,
     },
     {
       id: 'skill-marketplace',
       title: 'Skill 市场与安装源',
-      description: '这些来源服务于 Skill 中心的搜索、预检、文件预览与安装流程。',
+      description: '这些来源服务于 Skill 中心的搜索、预览和安装流程。',
       items: skillMarketplaceItems,
     },
+    {
+      id: 'uapis',
+      title: 'UAPIs 搜索接口',
+      description: '这些来源来自 UAPIs 工具箱，适合优先用于更聚焦的搜索请求。',
+      items: uapisItems,
+    },
   ]
+}
+
+export async function setSearchSourceEnabled(input: SetSearchSourceEnabledInput) {
+  const family = SEARCH_SOURCE_FAMILIES.find((item) => item === input.family)
+  if (!family) throw new HttpError(400, 'Invalid search source family.')
+
+  const id = typeof input.id === 'string' ? input.id.trim() : ''
+  if (!id) throw new HttpError(400, 'Search source id is required.')
+  if (typeof input.enabled !== 'boolean') {
+    throw new HttpError(400, 'enabled must be boolean')
+  }
+
+  if (family === 'uapis') {
+    await setUapisApiEnabled(id, { enabled: input.enabled })
+    const groups = await listSearchSourceGroups()
+    const source = groups.flatMap((group) => group.items).find((item) => item.family === family && item.id === id)
+    if (!source) throw new HttpError(404, 'Search source not found.')
+    return source
+  }
+
+  if (family === 'web-search' && !ENGINE_MAP.has(id)) {
+    throw new HttpError(404, 'Search engine not found.')
+  }
+
+  if (family === 'skill-marketplace' && !SKILL_MARKETPLACE_SOURCE_IDS.has(id)) {
+    throw new HttpError(404, 'Skill marketplace source not found.')
+  }
+
+  const current = await readSearchSourcesConfig()
+  const disabled = new Set(current.disabledSourceKeys)
+  const key = makeSourceKey(family, id)
+  if (input.enabled) disabled.delete(key)
+  else disabled.add(key)
+
+  await writeSearchSourcesConfig({
+    disabledSourceKeys: [...disabled].sort(),
+    updatedAt: Date.now(),
+  })
+
+  const groups = await listSearchSourceGroups()
+  const source = groups.flatMap((group) => group.items).find((item) => item.family === family && item.id === id)
+  if (!source) throw new HttpError(404, 'Search source not found.')
+  return source
 }
 
 export async function aggregateSearch(input: SearchRequest): Promise<SearchResponse> {
@@ -717,7 +912,7 @@ export async function aggregateSearch(input: SearchRequest): Promise<SearchRespo
       ? Math.max(1, Math.min(MAX_LIMIT, Math.floor(input.limit)))
       : DEFAULT_LIMIT
   const intent = input.intent ?? inferIntent(query)
-  const selectedEngines = chooseEngines(input, intent)
+  const selectedEngines = await chooseEngines(input, intent)
   const searchQuery = buildSearchQuery(input)
   const usedDefaultStableSet = !Array.isArray(input.engines) || input.engines.length === 0
   const rawResults: RawSearchItem[] = []

@@ -36,12 +36,24 @@ export type ScheduledTaskMode = 'once' | 'recurring' | 'ongoing'
 export type ScheduledTaskRepeatUnit = 'day' | 'week' | 'month'
 
 export type ScheduledTaskWechatDeliveryMode = 'auto' | 'fixed' | 'off'
+export type ScheduledTaskFeishuDeliveryMode = 'auto' | 'fixed' | 'off'
+export type ScheduledTaskFeishuReceiveIdType =
+  | 'chat_id'
+  | 'open_id'
+  | 'user_id'
+  | 'union_id'
+  | 'email'
 
 export type ScheduledTaskDelivery = {
   wechat: {
     mode: ScheduledTaskWechatDeliveryMode
     accountId: string
     peerId: string
+  }
+  feishu: {
+    mode: ScheduledTaskFeishuDeliveryMode
+    receiveIdType: ScheduledTaskFeishuReceiveIdType
+    receiveId: string
   }
 }
 

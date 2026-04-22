@@ -18,10 +18,16 @@ function normalizeMeta(meta: Record<string, unknown>): StoredChatMessage['meta']
       : undefined
   const normalized: StoredChatMessage['meta'] = {
     source:
-      meta.source === 'web' || meta.source === 'wechat' || meta.source === 'scheduled-task'
+      meta.source === 'web' ||
+      meta.source === 'wechat' ||
+      meta.source === 'feishu' ||
+      meta.source === 'scheduled-task'
         ? meta.source
         : undefined,
-    channel: meta.channel === 'web' || meta.channel === 'wechat' ? meta.channel : undefined,
+    channel:
+      meta.channel === 'web' || meta.channel === 'wechat' || meta.channel === 'feishu'
+        ? meta.channel
+        : undefined,
     accountId: typeof meta.accountId === 'string' ? meta.accountId : undefined,
     peerId: typeof meta.peerId === 'string' ? meta.peerId : undefined,
     externalMessageId:
@@ -35,7 +41,9 @@ function normalizeMeta(meta: Record<string, unknown>): StoredChatMessage['meta']
               ? delivery.status
               : undefined,
           targetChannel:
-            delivery.targetChannel === 'wechat' ? delivery.targetChannel : undefined,
+            delivery.targetChannel === 'wechat' || delivery.targetChannel === 'feishu'
+              ? delivery.targetChannel
+              : undefined,
           targetPeerId:
             typeof delivery.targetPeerId === 'string' ? delivery.targetPeerId : undefined,
           error: typeof delivery.error === 'string' ? delivery.error : undefined,

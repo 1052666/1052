@@ -115,12 +115,14 @@ function validateStoredMessages(x: unknown): StoredChatMessage[] {
               source:
                 (m as any).meta.source === 'web' ||
                 (m as any).meta.source === 'wechat' ||
+                (m as any).meta.source === 'feishu' ||
                 (m as any).meta.source === 'scheduled-task'
                   ? (m as any).meta.source
                   : undefined,
               channel:
                 (m as any).meta.channel === 'web' ||
-                (m as any).meta.channel === 'wechat'
+                (m as any).meta.channel === 'wechat' ||
+                (m as any).meta.channel === 'feishu'
                   ? (m as any).meta.channel
                   : undefined,
               accountId:
@@ -145,7 +147,8 @@ function validateStoredMessages(x: unknown): StoredChatMessage[] {
                           ? (m as any).meta.delivery.status
                           : undefined,
                       targetChannel:
-                        (m as any).meta.delivery.targetChannel === 'wechat'
+                        (m as any).meta.delivery.targetChannel === 'wechat' ||
+                        (m as any).meta.delivery.targetChannel === 'feishu'
                           ? (m as any).meta.delivery.targetChannel
                           : undefined,
                       targetPeerId:

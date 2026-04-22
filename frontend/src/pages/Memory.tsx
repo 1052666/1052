@@ -1,4 +1,11 @@
-import { useDeferredValue, useEffect, useState, type FormEvent } from 'react'
+import {
+  useDeferredValue,
+  useEffect,
+  useState,
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+} from 'react'
 import {
   MemoryApi,
   type MemoryCategory,
@@ -187,6 +194,9 @@ export default function Memory() {
   const [editingSecureId, setEditingSecureId] = useState<string | null>(null)
   const [showMemoryForm, setShowMemoryForm] = useState(false)
   const [showSecureForm, setShowSecureForm] = useState(false)
+  const [expandedMemoryIds, setExpandedMemoryIds] = useState<Set<string>>(() => new Set())
+  const [expandedSuggestionIds, setExpandedSuggestionIds] = useState<Set<string>>(() => new Set())
+  const [expandedSecureIds, setExpandedSecureIds] = useState<Set<string>>(() => new Set())
 
   const [loading, setLoading] = useState(true)
   const [savingMemory, setSavingMemory] = useState(false)
@@ -195,6 +205,15 @@ export default function Memory() {
   const [busyDeleteId, setBusyDeleteId] = useState<string | null>(null)
   const [busySecureDeleteId, setBusySecureDeleteId] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
+
+  const toggleExpandedId = (setter: Dispatch<SetStateAction<Set<string>>>, id: string) => {
+    setter((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const loadLists = async (keyword = deferredQuery) => {
     const [memoryItems, suggestionItems, secureEntries] = await Promise.all([
@@ -627,8 +646,17 @@ export default function Memory() {
               ) : memories.length === 0 ? (
                 <div className="memory-empty">当前没有已确认的长期记忆。</div>
               ) : (
-                memories.map((item) => (
-                  <article key={item.id} className={'memory-card' + (item.active ? '' : ' inactive')}>
+                memories.map((item) => {
+                  const expanded = expandedMemoryIds.has(item.id)
+                  return (
+                    <article
+                      key={item.id}
+                      className={
+                        'memory-card memory-card-collapsible' +
+                        (item.active ? '' : ' inactive') +
+                        (expanded ? ' expanded' : ' collapsed')
+                      }
+                    >
                     <div className="memory-card-head">
                       <div>
                         <h3>{item.title}</h3>
@@ -641,6 +669,13 @@ export default function Memory() {
                         </div>
                       </div>
                       <div className="memory-card-actions">
+                        <button
+                          className="chip"
+                          type="button"
+                          onClick={() => toggleExpandedId(setExpandedMemoryIds, item.id)}
+                        >
+                          {expanded ? '收起详情' : '展开详情'}
+                        </button>
                         <button
                           className="icon-btn ghost"
                           type="button"
@@ -663,20 +698,29 @@ export default function Memory() {
                         </button>
                       </div>
                     </div>
-                    <CollapsibleContent text={item.content} collapsedLines={8} collapsedChars={900} />
-                    {item.tags.length > 0 ? (
-                      <div className="memory-tags">
-                        {item.tags.map((tag) => (
-                          <span key={tag}>#{tag}</span>
-                        ))}
+                    {expanded ? (
+                      <>
+                        <CollapsibleContent text={item.content} collapsedLines={8} collapsedChars={900} />
+                        {item.tags.length > 0 ? (
+                          <div className="memory-tags">
+                            {item.tags.map((tag) => (
+                              <span key={tag}>#{tag}</span>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="memory-card-foot">
+                          <span>ID: {item.id}</span>
+                          <span>更新于 {formatTime(item.updatedAt)}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="memory-card-preview-line">
+                        <span>{item.content.slice(0, 96) || '暂无正文'}</span>
                       </div>
-                    ) : null}
-                    <div className="memory-card-foot">
-                      <span>ID: {item.id}</span>
-                      <span>更新于 {formatTime(item.updatedAt)}</span>
-                    </div>
+                    )}
                   </article>
-                ))
+                  )
+                })
               )}
             </div>
           </section>
@@ -694,8 +738,13 @@ export default function Memory() {
               ) : suggestions.length === 0 ? (
                 <div className="memory-empty">当前没有待确认的长期记忆建议。</div>
               ) : (
-                suggestions.map((item) => (
-                  <article key={item.id} className="memory-card suggestion">
+                suggestions.map((item) => {
+                  const expanded = expandedSuggestionIds.has(item.id)
+                  return (
+                    <article
+                      key={item.id}
+                      className={'memory-card memory-card-collapsible suggestion' + (expanded ? ' expanded' : ' collapsed')}
+                    >
                     <div className="memory-card-head">
                       <div>
                         <h3>{item.title}</h3>
@@ -706,6 +755,13 @@ export default function Memory() {
                         </div>
                       </div>
                       <div className="memory-card-actions">
+                        <button
+                          className="chip"
+                          type="button"
+                          onClick={() => toggleExpandedId(setExpandedSuggestionIds, item.id)}
+                        >
+                          {expanded ? '收起详情' : '展开详情'}
+                        </button>
                         <button
                           className="chip primary"
                           type="button"
@@ -724,20 +780,29 @@ export default function Memory() {
                         </button>
                       </div>
                     </div>
-                    <CollapsibleContent text={item.content} collapsedLines={6} collapsedChars={700} />
-                    {item.tags.length > 0 ? (
-                      <div className="memory-tags">
-                        {item.tags.map((tag) => (
-                          <span key={tag}>#{tag}</span>
-                        ))}
+                    {expanded ? (
+                      <>
+                        <CollapsibleContent text={item.content} collapsedLines={6} collapsedChars={700} />
+                        {item.tags.length > 0 ? (
+                          <div className="memory-tags">
+                            {item.tags.map((tag) => (
+                              <span key={tag}>#{tag}</span>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="memory-card-foot">
+                          <span>ID: {item.id}</span>
+                          <span>生成于 {formatTime(item.updatedAt)}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="memory-card-preview-line">
+                        <span>{item.content.slice(0, 96) || '暂无正文'}</span>
                       </div>
-                    ) : null}
-                    <div className="memory-card-foot">
-                      <span>ID: {item.id}</span>
-                      <span>生成于 {formatTime(item.updatedAt)}</span>
-                    </div>
+                    )}
                   </article>
-                ))
+                  )
+                })
               )}
             </div>
           </section>
@@ -863,8 +928,13 @@ export default function Memory() {
               ) : secureItems.length === 0 ? (
                 <div className="memory-empty">当前没有敏感长期记忆。</div>
               ) : (
-                secureItems.map((item) => (
-                  <article key={item.id} className="memory-secure-card">
+                secureItems.map((item) => {
+                  const expanded = expandedSecureIds.has(item.id)
+                  return (
+                    <article
+                      key={item.id}
+                      className={'memory-secure-card memory-card-collapsible' + (expanded ? ' expanded' : ' collapsed')}
+                    >
                     <div className="memory-card-head">
                       <div>
                         <h3>{item.title}</h3>
@@ -874,6 +944,13 @@ export default function Memory() {
                         </div>
                       </div>
                       <div className="memory-card-actions">
+                        <button
+                          className="chip"
+                          type="button"
+                          onClick={() => toggleExpandedId(setExpandedSecureIds, item.id)}
+                        >
+                          {expanded ? '收起详情' : '展开详情'}
+                        </button>
                         <button
                           className="icon-btn ghost"
                           type="button"
@@ -893,27 +970,36 @@ export default function Memory() {
                         </button>
                       </div>
                     </div>
-                    <div className="memory-secure-mask">{item.mask || '(empty)'}</div>
-                    {item.tags.length > 0 ? (
-                      <div className="memory-tags">
-                        {item.tags.map((tag) => (
-                          <span key={tag}>#{tag}</span>
-                        ))}
+                    {expanded ? (
+                      <>
+                        <div className="memory-secure-mask">{item.mask || '(empty)'}</div>
+                        {item.tags.length > 0 ? (
+                          <div className="memory-tags">
+                            {item.tags.map((tag) => (
+                              <span key={tag}>#{tag}</span>
+                            ))}
+                          </div>
+                        ) : null}
+                        {item.allowedUse.length > 0 ? (
+                          <div className="memory-secure-uses">
+                            {item.allowedUse.map((use) => (
+                              <span key={use}>{use}</span>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="memory-card-foot">
+                          <span>{item.id}</span>
+                          <span>{formatTime(item.updatedAt)}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="memory-card-preview-line">
+                        <span>{item.mask || '(empty)'}</span>
                       </div>
-                    ) : null}
-                    {item.allowedUse.length > 0 ? (
-                      <div className="memory-secure-uses">
-                        {item.allowedUse.map((use) => (
-                          <span key={use}>{use}</span>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="memory-card-foot">
-                      <span>{item.id}</span>
-                      <span>{formatTime(item.updatedAt)}</span>
-                    </div>
+                    )}
                   </article>
-                ))
+                  )
+                })
               )}
             </div>
           </section>

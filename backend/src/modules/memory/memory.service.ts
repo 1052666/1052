@@ -651,6 +651,24 @@ export async function createMemorySuggestion(input: MemoryInput) {
   items.unshift(suggestion)
   await saveSuggestions(items)
   await appendEvent('memory.suggest', { id: suggestion.id, title: suggestion.title })
+  void (async () => {
+    try {
+      const { loadFeishuWorkspaceConfig } = await import('../channels/feishu/feishu.store.js')
+      const workspace = await loadFeishuWorkspaceConfig()
+      if (workspace.enableMemoryCards === false) return
+      const { sendFeishuMemorySuggestionCardMessage } = await import(
+        '../channels/feishu/feishu.service.js'
+      )
+      await sendFeishuMemorySuggestionCardMessage({
+        suggestionId: suggestion.id,
+        title: suggestion.title,
+        content: suggestion.content,
+        tags: suggestion.tags,
+      })
+    } catch {
+      // Feishu delivery is best-effort for memory suggestions.
+    }
+  })()
   return suggestion
 }
 

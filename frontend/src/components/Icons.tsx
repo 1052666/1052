@@ -181,6 +181,14 @@ export const IconSocial = (p: Props) => (
   </svg>
 )
 
+export const IconToolbox = (p: Props) => (
+  <svg {...base(p)}>
+    <path d="M14.5 6.5 17 4l3 3-2.5 2.5" />
+    <path d="m14 7 3 3-8.5 8.5a2.1 2.1 0 0 1-3 0 2.1 2.1 0 0 1 0-3L14 7Z" />
+    <path d="M4 4h6M4 8h4M16 17h4M14 21h6" />
+  </svg>
+)
+
 export const IconDatabase = (p: Props) => (
   <svg {...base(p)}>
     <ellipse cx="12" cy="5" rx="9" ry="3" />

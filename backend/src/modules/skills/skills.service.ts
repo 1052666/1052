@@ -115,12 +115,18 @@ function skillsRoot() {
 
 function normalizeId(value: string) {
   const id = value
+    .normalize('NFKC')
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/[\\/]+/g, '-')
+    .replace(/\s+/gu, '-')
+    .replace(/[^\p{Letter}\p{Number}._-]+/gu, '-')
+    .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '')
   if (!id) throw new HttpError(400, 'Skill id cannot be empty')
-  if (id === '.' || id === '..' || id.includes('..')) throw new HttpError(400, 'Skill id is invalid')
+  if (id === '.' || id === '..' || id.includes('..') || /[\\/]/.test(id)) {
+    throw new HttpError(400, 'Skill id is invalid')
+  }
   return id
 }
 

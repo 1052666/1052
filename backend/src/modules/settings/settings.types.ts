@@ -23,6 +23,11 @@ export type AgentSettings = {
   streaming: boolean
   userPrompt: string
   fullAccess: boolean
+  contextMessageLimit: number
+}
+
+export type UapisSettings = {
+  apiKey: string
 }
 
 export type Settings = {
@@ -30,6 +35,7 @@ export type Settings = {
   imageGeneration: ImageGenerationSettings
   appearance: AppearanceSettings
   agent: AgentSettings
+  uapis: UapisSettings
 }
 
 /** API key 永不出站,用 hasApiKey + 脱敏预览替代 */
@@ -53,6 +59,15 @@ export type PublicSettings = {
   }
   appearance: AppearanceSettings
   agent: AgentSettings
+  uapis: {
+    hasApiKey: boolean
+    apiKeyMask: string
+    mode: 'free-ip-quota' | 'api-key'
+    home: string
+    console: string
+    anonymousMonthlyCredits: number
+    apiKeyMonthlyCredits: number
+  }
 }
 
 export type SettingsPatch = {
@@ -60,4 +75,5 @@ export type SettingsPatch = {
   imageGeneration?: Partial<ImageGenerationSettings>
   appearance?: Partial<AppearanceSettings>
   agent?: Partial<AgentSettings>
+  uapis?: Partial<UapisSettings>
 }

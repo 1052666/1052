@@ -3,6 +3,7 @@ import { config } from './config.js'
 import { startScheduledTaskRunner } from './modules/calendar/calendar.schedule.service.js'
 import { ensureAgentWorkspace } from './modules/agent/agent.workspace.service.js'
 import { startAllEnabledWechatAccounts } from './modules/channels/wechat/wechat.service.js'
+import { startAllEnabledFeishuChannels } from './modules/channels/feishu/feishu.service.js'
 
 const app = createApp()
 
@@ -15,6 +16,7 @@ async function bootstrap() {
     console.log(`[agent-backend] agent workspace: ${agentWorkspace}`)
     startScheduledTaskRunner()
     void startAllEnabledWechatAccounts()
+    void startAllEnabledFeishuChannels()
   })
 }
 

@@ -352,11 +352,9 @@ export default function Chat() {
   }
 
   const stop = () => {
-    if (abortRef.current) {
-      abortRef.current.abort()
-      abortRef.current = null
-    }
-    const streaming = messagesRef.current.find((m) => m.streaming)
+    abortRef.current?.abort()
+    abortRef.current = null
+    const streaming = messagesRef.current.find((message) => message.streaming)
     if (streaming) {
       patchMsg(
         streaming.id,
@@ -474,11 +472,11 @@ export default function Chat() {
 
         const restored = storedMessages.map((message) => ({ ...message }))
         let needsPatch = false
-        for (const m of restored) {
-          if (m.streaming) {
-            m.streaming = false
-            m.error = true
-            if (!m.content) m.content = '（请求中断，未收到回复）'
+        for (const message of restored) {
+          if (message.streaming) {
+            message.streaming = false
+            message.error = true
+            if (!message.content) message.content = '（请求中断，未收到回复）'
             needsPatch = true
           }
         }
@@ -713,8 +711,8 @@ export default function Chat() {
 
     try {
       if (useStream) {
-        const ctrl = new AbortController()
-        abortRef.current = ctrl
+        const controller = new AbortController()
+        abortRef.current = controller
         await AgentApi.chatStream(
           history,
           {
@@ -732,7 +730,7 @@ export default function Chat() {
                 true,
               ),
           },
-          ctrl.signal,
+          controller.signal,
         )
       } else {
         const { message } = await AgentApi.chat(history)
@@ -944,11 +942,18 @@ export default function Chat() {
                     {message.meta?.source === 'wechat' && (
                       <span className="msg-badge">微信</span>
                     )}
+                    {message.meta?.source === 'feishu' && (
+                      <span className="msg-badge">飞书</span>
+                    )}
                     {message.meta?.delivery?.status === 'pending' && (
-                      <span className="msg-badge">微信待发送</span>
+                      <span className="msg-badge">
+                        {message.meta.delivery.targetChannel === 'feishu' ? '飞书待发送' : '微信待发送'}
+                      </span>
                     )}
                     {message.meta?.delivery?.status === 'failed' && (
-                      <span className="msg-badge error">微信发送失败</span>
+                      <span className="msg-badge error">
+                        {message.meta.delivery.targetChannel === 'feishu' ? '飞书发送失败' : '微信发送失败'}
+                      </span>
                     )}
                     <span className="msg-time">
                       {new Date(message.ts).toLocaleTimeString('zh-CN', {

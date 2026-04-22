@@ -1,10 +1,36 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { SettingsApi, type PublicSettings, type SettingsPatch } from '../api/settings'
 import MemorySummaryPanel from '../components/MemorySummaryPanel'
 import TokenUsagePanel from '../components/TokenUsagePanel'
 import { useTheme } from '../theme-context'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+function SettingsFoldout({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string
+  defaultOpen?: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+
+  return (
+    <section className={'settings-section settings-foldout' + (open ? ' open' : '')}>
+      <button
+        className="settings-section-title"
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{title}</span>
+        <small>{open ? '收起' : '展开'}</small>
+      </button>
+      {open ? <div className="settings-foldout-body">{children}</div> : null}
+    </section>
+  )
+}
 
 export default function Settings() {
   const { theme, setTheme } = useTheme()
@@ -23,9 +49,11 @@ export default function Settings() {
   const [imageOutputFormat, setImageOutputFormat] =
     useState<PublicSettings['imageGeneration']['outputFormat']>('png')
   const [imageOutputCompression, setImageOutputCompression] = useState(80)
+  const [uapisApiKey, setUapisApiKey] = useState('')
   const [userPrompt, setUserPrompt] = useState('')
   const [streaming, setStreaming] = useState(true)
   const [fullAccess, setFullAccess] = useState(false)
+  const [contextMessageLimit, setContextMessageLimit] = useState(50)
   const [state, setState] = useState<SaveState>('idle')
   const [error, setError] = useState('')
 
@@ -45,6 +73,7 @@ export default function Settings() {
         setUserPrompt(settings.agent.userPrompt)
         setStreaming(settings.agent.streaming)
         setFullAccess(settings.agent.fullAccess)
+        setContextMessageLimit(settings.agent.contextMessageLimit)
         setTheme(settings.appearance.theme)
       })
       .catch((err) => setError(err.message ?? '设置加载失败'))
@@ -70,8 +99,11 @@ export default function Settings() {
         outputFormat: imageOutputFormat,
         outputCompression: imageOutputCompression,
       },
+      uapis: {
+        ...(uapisApiKey.trim() ? { apiKey: uapisApiKey.trim() } : {}),
+      },
       appearance: { theme },
-      agent: { streaming, userPrompt, fullAccess },
+      agent: { streaming, userPrompt, fullAccess, contextMessageLimit },
     }
 
     try {
@@ -79,6 +111,7 @@ export default function Settings() {
       setLoaded(settings)
       setApiKey('')
       setImageApiKey('')
+      setUapisApiKey('')
       setState('saved')
       window.setTimeout(() => setState('idle'), 1500)
     } catch (err) {
@@ -109,8 +142,7 @@ export default function Settings() {
       <div className="settings-layout">
         <div className="settings-main">
           <div className="settings">
-            <section className="settings-section">
-              <div className="settings-section-title">LLM 接入</div>
+            <SettingsFoldout title="LLM 接入" defaultOpen>
 
               <div className="settings-row">
                 <div className="settings-row-label">
@@ -158,10 +190,9 @@ export default function Settings() {
                   autoComplete="off"
                 />
               </div>
-            </section>
+            </SettingsFoldout>
 
-            <section className="settings-section">
-              <div className="settings-section-title">图像生成</div>
+            <SettingsFoldout title="图像生成">
 
               <div className="settings-row">
                 <div className="settings-row-label">
@@ -311,10 +342,53 @@ export default function Settings() {
                   }
                 />
               </div>
-            </section>
+            </SettingsFoldout>
 
-            <section className="settings-section">
-              <div className="settings-section-title">Agent 行为</div>
+            <SettingsFoldout title="UAPIs 工具箱">
+
+              <div className="settings-row">
+                <div className="settings-row-label">
+                  <div className="settings-row-title">调用模式</div>
+                  <div className="settings-row-desc">
+                    {loaded?.uapis.mode === 'api-key'
+                      ? `API Key 模式 (${loaded.uapis.apiKeyMask})，留空则保持不变。`
+                      : '免费 IP 额度模式：不登录不注册时，每个 IP 每月约 1500 积分。'}
+                  </div>
+                </div>
+                <input
+                  className="settings-input"
+                  type="password"
+                  value={uapisApiKey}
+                  onChange={(event) => setUapisApiKey(event.target.value)}
+                  placeholder={loaded?.uapis.hasApiKey ? '保持不变' : '可选，Bearer API Key'}
+                  autoComplete="off"
+                />
+              </div>
+
+              <div className="settings-row settings-row-stack">
+                <div className="settings-row-label">
+                  <div className="settings-row-title">额度与官网</div>
+                  <div className="settings-row-desc">
+                    UAPIs 的 API Key 是可选项。不填写也能使用免费 IP 额度；注册登录后填写免费
+                    Key，月额度约提升到 {loaded?.uapis.apiKeyMonthlyCredits ?? 3500} 积分。
+                  </div>
+                </div>
+                <div className="uapis-settings-links">
+                  <a href={loaded?.uapis.home || 'https://uapis.cn'} target="_blank" rel="noreferrer">
+                    官网
+                  </a>
+                  <a
+                    href={loaded?.uapis.console || 'https://uapis.cn/console'}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    控制台
+                  </a>
+                </div>
+              </div>
+            </SettingsFoldout>
+
+            <SettingsFoldout title="Agent 行为" defaultOpen>
 
               <div className="settings-row settings-row-stack">
                 <div className="settings-row-label">
@@ -350,6 +424,28 @@ export default function Settings() {
 
               <div className="settings-row">
                 <div className="settings-row-label">
+                  <div className="settings-row-title">聊天上下文条数</div>
+                  <div className="settings-row-desc">
+                    控制每次发给模型的最近聊天消息条数。默认 50 条，范围 1-300 条。
+                  </div>
+                </div>
+                <input
+                  className="settings-input"
+                  type="number"
+                  min={1}
+                  max={300}
+                  step={1}
+                  value={contextMessageLimit}
+                  onChange={(event) =>
+                    setContextMessageLimit(
+                      Math.max(1, Math.min(300, Number(event.target.value) || 1)),
+                    )
+                  }
+                />
+              </div>
+
+              <div className="settings-row">
+                <div className="settings-row-label">
                   <div className="settings-row-title">完全权限</div>
                   <div className="settings-row-desc">
                     开启后，Agent 对本地文件、笔记、资源、Skill、终端和长期记忆写入拥有最高权限，不再重复确认。
@@ -363,10 +459,9 @@ export default function Settings() {
                   <span className="switch-thumb" />
                 </button>
               </div>
-            </section>
+            </SettingsFoldout>
 
-            <section className="settings-section">
-              <div className="settings-section-title">外观</div>
+            <SettingsFoldout title="外观">
 
               <div className="settings-row">
                 <div className="settings-row-label">
@@ -386,7 +481,7 @@ export default function Settings() {
                   ))}
                 </div>
               </div>
-            </section>
+            </SettingsFoldout>
           </div>
         </div>
 

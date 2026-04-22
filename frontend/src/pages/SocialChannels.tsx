@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import {
   SocialChannelsApi,
+  type FeishuConfigInput,
+  type FeishuDeliveryTarget,
+  type FeishuStatus,
   type WechatAccountSummary,
   type WechatDeliveryTarget,
   type WechatLoginStart,
@@ -10,11 +13,23 @@ import {
   type WecomStatus,
   type WecomWebhookSummary,
 } from '../api/social-channels'
+import { FeishuWorkspacePanel } from '../components/FeishuWorkspacePanel'
 import { IconChevron, IconRefresh, IconSocial, IconTrash } from '../components/Icons'
 
 type Notice = {
   type: 'success' | 'error' | 'info'
   message: string
+}
+
+type FeishuFormState = {
+  appId: string
+  appSecret: string
+  verificationToken: string
+  encryptKey: string
+  callbackBaseUrl: string
+  enabled: boolean
+  autoReplyEnabled: boolean
+  cardCallbackEnabled: boolean
 }
 
 function formatTime(value?: number | string) {
@@ -29,7 +44,7 @@ function formatTime(value?: number | string) {
   }).format(timestamp)
 }
 
-function accountState(account: WechatAccountSummary) {
+function wechatAccountState(account: WechatAccountSummary) {
   if (!account.configured) return '未登录'
   if (account.running) return '接收中'
   if (account.enabled) return '已启用，等待启动'
@@ -44,58 +59,147 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
+function toFeishuForm(status?: FeishuStatus | null): FeishuFormState {
+  return {
+    appId: '',
+    appSecret: '',
+    verificationToken: '',
+    encryptKey: '',
+    callbackBaseUrl: status?.callbackBaseUrl ?? '',
+    enabled: status?.enabled ?? false,
+    autoReplyEnabled: status?.autoReplyEnabled ?? true,
+    cardCallbackEnabled: status?.cardCallbackEnabled ?? true,
+  }
+}
+
 export default function SocialChannels() {
   const navigate = useNavigate()
   const { channel } = useParams<{ channel?: string }>()
-  const [status, setStatus] = useState<WechatStatus | null>(null)
-  const [deliveryTargets, setDeliveryTargets] = useState<WechatDeliveryTarget[]>([])
+
+  const [wechatStatus, setWechatStatus] = useState<WechatStatus | null>(null)
+  const [wechatTargets, setWechatTargets] = useState<WechatDeliveryTarget[]>([])
   const [loading, setLoading] = useState(true)
   const [login, setLogin] = useState<WechatLoginStart | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [loginPolling, setLoginPolling] = useState(false)
   const [busyAccount, setBusyAccount] = useState('')
   const [pendingDelete, setPendingDelete] = useState('')
-  const [notice, setNotice] = useState<Notice | null>(null)
-  const pollingCancelled = useRef(false)
 
-  const [, setWecomStatus] = useState<WecomStatus | null>(null)
+  const [feishuStatus, setFeishuStatus] = useState<FeishuStatus | null>(null)
+  const [feishuTargets, setFeishuTargets] = useState<FeishuDeliveryTarget[]>([])
+  const [feishuForm, setFeishuForm] = useState<FeishuFormState>(toFeishuForm())
+  const [feishuSaving, setFeishuSaving] = useState(false)
+  const [feishuSending, setFeishuSending] = useState(false)
+  const [feishuSendReceiveId, setFeishuSendReceiveId] = useState('')
+  const [feishuSendText, setFeishuSendText] = useState('1052 OS 已接入飞书。')
+  const [feishuSendMode, setFeishuSendMode] = useState<'text' | 'card' | 'media'>('text')
+  const [feishuSendMediaMode, setFeishuSendMediaMode] = useState<
+    'auto' | 'image' | 'file' | 'audio' | 'media'
+  >('auto')
+  const [feishuSendFile, setFeishuSendFile] = useState<File | null>(null)
+  const [feishuSendFileKey, setFeishuSendFileKey] = useState(0)
+  const [wecomStatus, setWecomStatus] = useState<WecomStatus | null>(null)
   const [wecomWebhooks, setWecomWebhooks] = useState<WecomWebhookSummary[]>([])
   const [wecomFormName, setWecomFormName] = useState('')
   const [wecomFormUrl, setWecomFormUrl] = useState('')
   const [wecomSaving, setWecomSaving] = useState(false)
-  const [wecomTesting, setWecomTesting] = useState<string | null>(null)
+  const [wecomTestingId, setWecomTestingId] = useState('')
   const [wecomPendingDelete, setWecomPendingDelete] = useState('')
 
-  const accounts = status?.accounts ?? []
-  const runningCount = useMemo(
-    () => accounts.filter((account) => account.running).length,
-    [accounts],
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const pollingCancelled = useRef(false)
+
+  const activeChannel =
+    channel === 'wechat' || channel === 'feishu' || channel === 'wecom' ? channel : null
+  const isUnknownChannel = Boolean(channel && !activeChannel)
+
+  const wechatAccounts = wechatStatus?.accounts ?? []
+  const wechatRunningCount = useMemo(
+    () => wechatAccounts.filter((account) => account.running).length,
+    [wechatAccounts],
   )
-  const activeChannel = channel === 'wechat' ? 'wechat' : channel === 'wecom' ? 'wecom' : null
-  const isUnknownChannel = Boolean(channel && channel !== 'wechat' && channel !== 'wecom')
-  const wechatState = runningCount > 0 ? '接收中' : accounts.length > 0 ? '已接入' : '未接入'
-  const wechatStateClass = runningCount > 0 ? ' running' : accounts.length > 0 ? ' connected' : ''
+  const wechatState =
+    wechatRunningCount > 0 ? '接收中' : wechatAccounts.length > 0 ? '已接入' : '未接入'
+  const wechatStateClass =
+    wechatRunningCount > 0 ? ' running' : wechatAccounts.length > 0 ? ' connected' : ''
+
+  const feishuState =
+    feishuStatus?.running === true
+      ? '接收中'
+      : feishuStatus?.configured
+        ? '已配置'
+        : '未配置'
+  const feishuStateClass =
+    feishuStatus?.running === true ? ' running' : feishuStatus?.configured ? ' connected' : ''
   const wecomState = wecomWebhooks.length > 0 ? '已接入' : '未接入'
   const wecomStateClass = wecomWebhooks.length > 0 ? ' connected' : ''
 
   const showNotice = (message: string, type: Notice['type'] = 'info') => {
     setNotice({ message, type })
-    window.setTimeout(() => setNotice(null), 4000)
+  }
+
+  const syncFeishuStatus = (status: FeishuStatus) => {
+    setFeishuStatus(status)
+    setFeishuForm((current) => ({
+      ...current,
+      callbackBaseUrl: current.callbackBaseUrl || status.callbackBaseUrl || '',
+      enabled: status.enabled,
+      autoReplyEnabled: status.autoReplyEnabled,
+      cardCallbackEnabled: status.cardCallbackEnabled,
+    }))
   }
 
   const loadStatus = async () => {
     try {
-      const [nextStatus, targets, wecom] = await Promise.all([
+      const [
+        wechatStatusResult,
+        wechatTargetsResult,
+        feishuStatusResult,
+        feishuTargetsResult,
+        wecomStatusResult,
+      ] = await Promise.allSettled([
         SocialChannelsApi.wechatStatus(),
         SocialChannelsApi.wechatDeliveryTargets(),
+        SocialChannelsApi.feishuStatus(),
+        SocialChannelsApi.feishuDeliveryTargets(),
         SocialChannelsApi.wecomStatus(),
       ])
-      setStatus(nextStatus)
-      setDeliveryTargets(targets)
-      setWecomStatus(wecom)
-      setWecomWebhooks(wecom.webhooks ?? [])
-    } catch (error) {
-      showNotice(getErrorMessage(error, '社交通道状态加载失败'), 'error')
+
+      if (wechatStatusResult.status === 'fulfilled') {
+        setWechatStatus(wechatStatusResult.value)
+      }
+      if (wechatTargetsResult.status === 'fulfilled') {
+        setWechatTargets(wechatTargetsResult.value)
+      }
+      if (feishuStatusResult.status === 'fulfilled') {
+        syncFeishuStatus(feishuStatusResult.value)
+      }
+      if (feishuTargetsResult.status === 'fulfilled') {
+        setFeishuTargets(feishuTargetsResult.value)
+        if (!feishuSendReceiveId && feishuTargetsResult.value.length > 0) {
+          setFeishuSendReceiveId(feishuTargetsResult.value[0].receiveId)
+        }
+      }
+      if (wecomStatusResult.status === 'fulfilled') {
+        setWecomStatus(wecomStatusResult.value)
+        setWecomWebhooks(wecomStatusResult.value.webhooks ?? [])
+      }
+
+      const firstError =
+        wechatStatusResult.status === 'rejected'
+          ? wechatStatusResult.reason
+          : wechatTargetsResult.status === 'rejected'
+            ? wechatTargetsResult.reason
+            : feishuStatusResult.status === 'rejected'
+              ? feishuStatusResult.reason
+              : feishuTargetsResult.status === 'rejected'
+                ? feishuTargetsResult.reason
+                : wecomStatusResult.status === 'rejected'
+                  ? wecomStatusResult.reason
+                : null
+      if (firstError) {
+        showNotice(getErrorMessage(firstError, '社交通道状态加载失败'), 'error')
+      }
     } finally {
       setLoading(false)
     }
@@ -134,7 +238,7 @@ export default function SocialChannels() {
     }
   }, [login])
 
-  const startLogin = async () => {
+  const startWechatLogin = async () => {
     pollingCancelled.current = true
     setLogin(null)
     setQrDataUrl('')
@@ -145,13 +249,13 @@ export default function SocialChannels() {
       setLoginPolling(true)
       showNotice(result.message, 'success')
       pollingCancelled.current = false
-      void pollLogin(result.sessionKey)
+      void pollWechatLogin(result.sessionKey)
     } catch (error) {
       showNotice(getErrorMessage(error, '微信二维码生成失败'), 'error')
     }
   }
 
-  const pollLogin = async (sessionKey: string) => {
+  const pollWechatLogin = async (sessionKey: string) => {
     while (!pollingCancelled.current) {
       try {
         const result = await SocialChannelsApi.waitWechatLogin(sessionKey, 10_000)
@@ -177,7 +281,7 @@ export default function SocialChannels() {
     }
   }
 
-  const startAccount = async (accountId: string) => {
+  const startWechatAccount = async (accountId: string) => {
     setBusyAccount(accountId)
     try {
       await SocialChannelsApi.startWechatAccount(accountId)
@@ -190,7 +294,7 @@ export default function SocialChannels() {
     }
   }
 
-  const stopAccount = async (accountId: string) => {
+  const stopWechatAccount = async (accountId: string) => {
     setBusyAccount(accountId)
     try {
       await SocialChannelsApi.stopWechatAccount(accountId)
@@ -203,7 +307,7 @@ export default function SocialChannels() {
     }
   }
 
-  const deleteAccount = async (accountId: string) => {
+  const deleteWechatAccount = async (accountId: string) => {
     setBusyAccount(accountId)
     try {
       await SocialChannelsApi.deleteWechatAccount(accountId)
@@ -217,77 +321,232 @@ export default function SocialChannels() {
     }
   }
 
-  const createWecomWebhook = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!wecomFormName.trim() || !wecomFormUrl.trim()) {
-      showNotice('请填写名称和 Webhook URL。', 'error')
+  const updateFeishuField = <K extends keyof FeishuFormState>(
+    key: K,
+    value: FeishuFormState[K],
+  ) => {
+    setFeishuForm((current) => ({ ...current, [key]: value }))
+  }
+
+  const saveFeishuConfig = async () => {
+    setFeishuSaving(true)
+    try {
+      const payload: FeishuConfigInput = {
+        appId: feishuForm.appId,
+        appSecret: feishuForm.appSecret,
+        verificationToken: feishuForm.verificationToken,
+        encryptKey: feishuForm.encryptKey,
+        callbackBaseUrl: feishuForm.callbackBaseUrl,
+        enabled: feishuForm.enabled,
+        autoReplyEnabled: feishuForm.autoReplyEnabled,
+        cardCallbackEnabled: feishuForm.cardCallbackEnabled,
+      }
+      const status = await SocialChannelsApi.saveFeishuConfig(payload)
+      syncFeishuStatus(status)
+      showNotice('飞书配置已保存。留空的凭据字段会保留已有值。', 'success')
+    } catch (error) {
+      showNotice(getErrorMessage(error, '飞书配置保存失败'), 'error')
+    } finally {
+      setFeishuSaving(false)
+    }
+  }
+
+  const connectFeishu = async () => {
+    setFeishuSaving(true)
+    try {
+      const status = await SocialChannelsApi.connectFeishu()
+      syncFeishuStatus(status)
+      showNotice('飞书长连接已启动。请在飞书开发者后台确认订阅了接收消息事件。', 'success')
+    } catch (error) {
+      showNotice(getErrorMessage(error, '飞书连接启动失败'), 'error')
+    } finally {
+      setFeishuSaving(false)
+    }
+  }
+
+  const disconnectFeishu = async () => {
+    setFeishuSaving(true)
+    try {
+      const status = await SocialChannelsApi.disconnectFeishu()
+      syncFeishuStatus(status)
+      showNotice('飞书长连接已停止。', 'success')
+    } catch (error) {
+      showNotice(getErrorMessage(error, '飞书连接停止失败'), 'error')
+    } finally {
+      setFeishuSaving(false)
+    }
+  }
+
+  const sendFeishuTest = async () => {
+    if (!feishuSendReceiveId.trim()) {
+      showNotice('请先填写飞书 receive_id，通常可直接使用最近会话里的 chat_id。', 'error')
       return
     }
+    setFeishuSending(true)
+    try {
+      const result = await SocialChannelsApi.sendFeishuMessage({
+        receiveIdType: 'chat_id',
+        receiveId: feishuSendReceiveId.trim(),
+        text: feishuSendText.trim(),
+        cardTemplate: feishuSendMode === 'card' ? 'test' : undefined,
+      })
+      showNotice(
+        result.msgType === 'interactive'
+          ? '飞书测试卡片已发送。卡片按钮需要在开发者后台配置回调地址后才能真正交互。'
+          : '飞书测试消息已发送。',
+        'success',
+      )
+      await loadStatus()
+    } catch (error) {
+      showNotice(getErrorMessage(error, '飞书测试消息发送失败'), 'error')
+    } finally {
+      setFeishuSending(false)
+    }
+  }
+
+  const sendFeishuTestV2 = async () => {
+    if (feishuSendMode !== 'media') {
+      await sendFeishuTest()
+      return
+    }
+    if (!feishuSendReceiveId.trim()) {
+      showNotice('请先填写飞书 receive_id，通常可以直接使用最近会话里的 chat_id。', 'error')
+      return
+    }
+    if (feishuSendMode === 'media' && !feishuSendFile) {
+      showNotice('请选择一个要发送到飞书的媒体文件。', 'error')
+      return
+    }
+
+    setFeishuSending(true)
+    try {
+      if (feishuSendMode === 'media' && feishuSendFile) {
+        const result = await SocialChannelsApi.sendFeishuMedia({
+          receiveIdType: 'chat_id',
+          receiveId: feishuSendReceiveId.trim(),
+          text: feishuSendText.trim(),
+          mode: feishuSendMediaMode,
+          file: feishuSendFile,
+        })
+        showNotice(
+          result.warnings.length > 0
+            ? `飞书媒体已发送，但有 ${result.warnings.length} 条处理提示。`
+            : '飞书媒体消息已发送。',
+          result.warnings.length > 0 ? 'info' : 'success',
+        )
+        setFeishuSendFile(null)
+        setFeishuSendFileKey((current) => current + 1)
+      } else {
+        const result = await SocialChannelsApi.sendFeishuMessage({
+          receiveIdType: 'chat_id',
+          receiveId: feishuSendReceiveId.trim(),
+          text: feishuSendText.trim(),
+          cardTemplate: undefined,
+        })
+        showNotice(
+          result.msgType === 'interactive'
+            ? '飞书测试卡片已发送。卡片按钮需要在开发者后台配置回调地址后才能真正交互。'
+            : '飞书测试消息已发送。',
+          'success',
+        )
+      }
+      await loadStatus()
+    } catch (error) {
+      showNotice(getErrorMessage(error, '飞书测试消息发送失败'), 'error')
+    } finally {
+      setFeishuSending(false)
+    }
+  }
+
+  const createWecomWebhook = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!wecomFormName.trim() || !wecomFormUrl.trim()) {
+      showNotice('请先填写企业微信机器人的名称和 Webhook URL。', 'error')
+      return
+    }
+
     setWecomSaving(true)
     try {
-      await SocialChannelsApi.wecomCreateWebhook({ name: wecomFormName, webhookUrl: wecomFormUrl })
+      await SocialChannelsApi.wecomCreateWebhook({
+        name: wecomFormName.trim(),
+        webhookUrl: wecomFormUrl.trim(),
+      })
       setWecomFormName('')
       setWecomFormUrl('')
-      const ws = await SocialChannelsApi.wecomStatus()
-      setWecomStatus(ws)
-      setWecomWebhooks(ws.webhooks ?? [])
-      showNotice('Webhook 创建成功。', 'success')
+      showNotice('企业微信 Webhook 已添加。', 'success')
+      await loadStatus()
     } catch (error) {
-      showNotice(getErrorMessage(error, '创建 Webhook 失败'), 'error')
+      showNotice(getErrorMessage(error, '企业微信 Webhook 创建失败'), 'error')
     } finally {
       setWecomSaving(false)
     }
   }
 
+  const toggleWecomWebhook = async (id: string, enabled: boolean) => {
+    setWecomTestingId(id)
+    try {
+      await SocialChannelsApi.wecomUpdateWebhook(id, { enabled })
+      showNotice(enabled ? '企业微信 Webhook 已启用。' : '企业微信 Webhook 已停用。', 'success')
+      await loadStatus()
+    } catch (error) {
+      showNotice(getErrorMessage(error, '企业微信 Webhook 状态更新失败'), 'error')
+    } finally {
+      setWecomTestingId('')
+    }
+  }
+
   const testWecomWebhook = async (id: string) => {
-    setWecomTesting(id)
+    setWecomTestingId(id)
     try {
       const result = await SocialChannelsApi.wecomTestWebhook(id)
-      showNotice(result.message || '测试消息已发送。', 'success')
+      showNotice(result.message || '企业微信测试消息已发送。', 'success')
+      await loadStatus()
     } catch (error) {
-      showNotice(getErrorMessage(error, 'Webhook 测试失败'), 'error')
+      showNotice(getErrorMessage(error, '企业微信测试失败'), 'error')
     } finally {
-      setWecomTesting(null)
+      setWecomTestingId('')
     }
   }
 
   const deleteWecomWebhook = async (id: string) => {
+    setWecomTestingId(id)
     try {
       await SocialChannelsApi.wecomDeleteWebhook(id)
-      showNotice('Webhook 已删除。', 'success')
       setWecomPendingDelete('')
-      const ws = await SocialChannelsApi.wecomStatus()
-      setWecomStatus(ws)
-      setWecomWebhooks(ws.webhooks ?? [])
+      showNotice('企业微信 Webhook 已删除。', 'success')
+      await loadStatus()
     } catch (error) {
-      showNotice(getErrorMessage(error, 'Webhook 删除失败'), 'error')
+      showNotice(getErrorMessage(error, '企业微信 Webhook 删除失败'), 'error')
+    } finally {
+      setWecomTestingId('')
     }
   }
 
-  const toggleWecomWebhook = async (id: string, enabled: boolean) => {
-    try {
-      await SocialChannelsApi.wecomUpdateWebhook(id, { enabled })
-      showNotice(enabled ? 'Webhook 已启用。' : 'Webhook 已禁用。', 'success')
-      const ws = await SocialChannelsApi.wecomStatus()
-      setWecomStatus(ws)
-      setWecomWebhooks(ws.webhooks ?? [])
-    } catch (error) {
-      showNotice(getErrorMessage(error, 'Webhook 状态切换失败'), 'error')
-    }
-  }
+  const feishuCallbackCardUrl = feishuStatus?.callbackUrls.card
+  const feishuCallbackEventUrl = feishuStatus?.callbackUrls.event
 
   return (
     <div className="page social-page">
       <div className="page-head social-head">
         <div>
           <div className="eyebrow">Social Channels</div>
-          <h1>{activeChannel === 'wechat' ? '微信通道' : activeChannel === 'wecom' ? '企业微信通道' : '社交通道'}</h1>
+          <h1>
+            {activeChannel === 'wechat'
+              ? '微信通道'
+              : activeChannel === 'feishu'
+                ? '飞书通道'
+                : activeChannel === 'wecom'
+                  ? '企业微信通道'
+                : '社交通道'}
+          </h1>
           <p>
             {activeChannel === 'wechat'
               ? '管理微信扫码接入、账号启停、媒体收发和定时任务推送目标。'
-              : activeChannel === 'wecom'
-              ? '管理企业微信群机器人 Webhook，支持创建、编辑、测试和删除。'
-              : '把微信等外部平台接入同一个 Agent 聊天流。每个平台会进入独立二级页面，避免配置混在一起。'}
+              : activeChannel === 'feishu'
+                ? '管理飞书应用配置、长连接收消息、卡片回调地址和最近会话投递目标。'
+                : activeChannel === 'wecom'
+                  ? '管理企业微信群机器人 Webhook，补充企业微信消息推送与测试入口。'
+                : '把微信、飞书等外部平台接入同一个 Agent 聊天流。每个平台使用独立二级页面，避免配置混在一起。'}
           </p>
         </div>
         <button className="icon-btn" type="button" onClick={() => void loadStatus()} title="刷新状态">
@@ -295,7 +554,9 @@ export default function SocialChannels() {
         </button>
       </div>
 
-      {notice ? <div className={'banner' + (notice.type === 'error' ? ' error' : '')}>{notice.message}</div> : null}
+      {notice ? (
+        <div className={'banner' + (notice.type === 'error' ? ' error' : '')}>{notice.message}</div>
+      ) : null}
 
       {!channel ? (
         <section className="social-platform-grid" aria-label="社交通道平台">
@@ -311,18 +572,46 @@ export default function SocialChannels() {
               <div>
                 <span className="social-platform-kicker">WeChat</span>
                 <strong>微信</strong>
-                <small>扫码登录后接入同一 Agent 聊天流，支持文本、图片、文件、视频和语音。</small>
+                <small>
+                  扫码登录后接入同一 Agent 聊天流，支持文本、图片、文件、视频和语音。
+                </small>
               </div>
             </div>
             <div className="social-platform-foot">
               <span className={'social-platform-status' + wechatStateClass}>{wechatState}</span>
-              <span>{accounts.length} 个账号 / {runningCount} 个接收中</span>
+              <span>
+                {wechatAccounts.length} 个账号 / {wechatRunningCount} 个接收中
+              </span>
               <IconChevron size={16} />
             </div>
           </button>
 
           <button
-            className="social-platform-card wecom"
+            className="social-platform-card feishu"
+            type="button"
+            onClick={() => navigate('/social-channels/feishu')}
+          >
+            <div className="social-platform-main">
+              <div className="social-platform-mark feishu">
+                <IconSocial size={22} />
+              </div>
+              <div>
+                <span className="social-platform-kicker">Feishu</span>
+                <strong>飞书</strong>
+                <small>
+                  使用官方 SDK 长连接接收消息，支持最近会话投递、测试卡片和后续企业协作扩展。
+                </small>
+              </div>
+            </div>
+            <div className="social-platform-foot">
+              <span className={'social-platform-status' + feishuStateClass}>{feishuState}</span>
+              <span>{feishuTargets.length} 个最近会话</span>
+              <IconChevron size={16} />
+            </div>
+          </button>
+
+          <button
+            className="social-platform-card"
             type="button"
             onClick={() => navigate('/social-channels/wecom')}
           >
@@ -333,12 +622,14 @@ export default function SocialChannels() {
               <div>
                 <span className="social-platform-kicker">WeCom</span>
                 <strong>企业微信</strong>
-                <small>Webhook 群机器人推送，支持文本和 Markdown 消息格式。</small>
+                <small>
+                  接入企业微信群机器人 Webhook，可用于测试通知、企业群播报和后续自动化推送。
+                </small>
               </div>
             </div>
             <div className="social-platform-foot">
               <span className={'social-platform-status' + wecomStateClass}>{wecomState}</span>
-              <span>{wecomWebhooks.length} 个 Webhook</span>
+              <span>{wecomStatus?.webhooks?.length ?? wecomWebhooks.length} 个 Webhook</span>
               <IconChevron size={16} />
             </div>
           </button>
@@ -349,7 +640,7 @@ export default function SocialChannels() {
               <div>
                 <span className="social-platform-kicker">Next</span>
                 <strong>更多平台</strong>
-                <small>后续可在这里继续接入飞书、QQ、Telegram、邮件等通道。</small>
+                <small>后续可继续接入 Telegram、邮件、QQ 等通道，沿用相同结构。</small>
               </div>
             </div>
             <div className="social-platform-foot">
@@ -366,14 +657,10 @@ export default function SocialChannels() {
             <div>
               <div className="eyebrow">Active Channel</div>
               <h2>微信通道</h2>
-              <p>在这个通道卡片里完成微信扫码接入、账号启停、定时任务推送目标管理。</p>
+              <p>在这里完成微信扫码接入、账号启停、最近会话查看和定时任务推送目标管理。</p>
             </div>
             <div className="social-channel-actions">
-              <button
-                className="secondary-btn"
-                type="button"
-                onClick={() => navigate('/social-channels')}
-              >
+              <button className="secondary-btn" type="button" onClick={() => navigate('/social-channels')}>
                 返回通道列表
               </button>
               <span className={'social-platform-status' + wechatStateClass}>{wechatState}</span>
@@ -383,23 +670,23 @@ export default function SocialChannels() {
           <section className="social-overview">
             <div className="social-metric">
               <span>微信账号</span>
-              <strong>{accounts.length}</strong>
-              <small>{runningCount} 个接收中</small>
+              <strong>{wechatAccounts.length}</strong>
+              <small>{wechatRunningCount} 个接收中</small>
             </div>
             <div className="social-metric">
               <span>统一回显</span>
               <strong>已启用</strong>
-              <small>消息写入 data/chat-history.json</small>
+              <small>消息会写入同一个 1052 OS 聊天流</small>
             </div>
             <div className="social-metric">
               <span>当前能力</span>
               <strong>文本 + 媒体</strong>
-              <small>支持图片、文件、视频、语音接收与 Agent 媒体回传</small>
+              <small>支持图片、文件、视频、语音收发</small>
             </div>
             <div className="social-metric">
-              <span>定时推送</span>
-              <strong>{deliveryTargets.length}</strong>
-              <small>最近微信会话可作为任务触达目标</small>
+              <span>最近会话</span>
+              <strong>{wechatTargets.length}</strong>
+              <small>可作为定时任务推送目标</small>
             </div>
           </section>
 
@@ -412,7 +699,7 @@ export default function SocialChannels() {
                 </div>
               </div>
 
-              <button className="primary-btn" type="button" onClick={() => void startLogin()}>
+              <button className="primary-btn" type="button" onClick={() => void startWechatLogin()}>
                 生成微信登录二维码
               </button>
 
@@ -439,22 +726,19 @@ export default function SocialChannels() {
             <div className="social-card">
               <div className="social-card-head">
                 <div>
-                  <h2>定时任务推送目标</h2>
-                  <p>定时任务默认会推送到最近的微信会话；也可以在日历任务里固定账号和会话 ID。</p>
+                  <h2>最近微信会话</h2>
+                  <p>定时任务默认会推送到最近微信会话；也可以在日历任务里固定账号与会话。</p>
                 </div>
               </div>
 
-              {deliveryTargets.length === 0 ? (
+              {wechatTargets.length === 0 ? (
                 <div className="social-empty-note">
                   还没有可用会话。先从微信给 Agent 发一条消息，系统会记录最近会话用于后续提醒推送。
                 </div>
               ) : (
                 <div className="social-target-list">
-                  {deliveryTargets.map((target) => (
-                    <div
-                      className={'social-target-item' + (target.running ? ' running' : '')}
-                      key={`${target.accountId}:${target.peerId}`}
-                    >
+                  {wechatTargets.map((target) => (
+                    <div className={'social-target-item' + (target.running ? ' running' : '')} key={`${target.accountId}:${target.peerId}`}>
                       <div>
                         <strong>{target.label}</strong>
                         <span>{target.accountId}</span>
@@ -473,17 +757,17 @@ export default function SocialChannels() {
               <div className="social-card-head">
                 <div>
                   <h2>微信账号</h2>
-                  <p>每个账号独立保存 token、同步游标和 context_token，但所有消息共用 1052 OS 聊天历史。</p>
+                  <p>每个账号独立保存 token、同步游标和 context_token，但所有消息共用统一聊天历史。</p>
                 </div>
               </div>
 
               {loading ? <div className="empty-state">社交通道加载中...</div> : null}
-              {!loading && accounts.length === 0 ? (
+              {!loading && wechatAccounts.length === 0 ? (
                 <div className="empty-state">还没有接入微信账号。先生成二维码并扫码登录。</div>
               ) : null}
 
               <div className="social-account-list">
-                {accounts.map((account) => (
+                {wechatAccounts.map((account) => (
                   <article className="social-account-card" key={account.accountId}>
                     <div className="social-account-main">
                       <div>
@@ -493,7 +777,7 @@ export default function SocialChannels() {
                         <div className="social-account-id">{account.accountId}</div>
                       </div>
                       <span className={'social-status' + (account.running ? ' running' : '')}>
-                        {accountState(account)}
+                        {wechatAccountState(account)}
                       </span>
                     </div>
 
@@ -512,7 +796,7 @@ export default function SocialChannels() {
                           className="secondary-btn"
                           type="button"
                           disabled={busyAccount === account.accountId}
-                          onClick={() => void stopAccount(account.accountId)}
+                          onClick={() => void stopWechatAccount(account.accountId)}
                         >
                           暂停接收
                         </button>
@@ -521,7 +805,7 @@ export default function SocialChannels() {
                           className="primary-btn"
                           type="button"
                           disabled={busyAccount === account.accountId}
-                          onClick={() => void startAccount(account.accountId)}
+                          onClick={() => void startWechatAccount(account.accountId)}
                         >
                           启动接收
                         </button>
@@ -532,7 +816,7 @@ export default function SocialChannels() {
                             className="danger-btn"
                             type="button"
                             disabled={busyAccount === account.accountId}
-                            onClick={() => void deleteAccount(account.accountId)}
+                            onClick={() => void deleteWechatAccount(account.accountId)}
                           >
                             确认删除
                           </button>
@@ -555,83 +839,400 @@ export default function SocialChannels() {
                 ))}
               </div>
             </div>
+
+            <FeishuWorkspacePanel onNotice={showNotice} />
           </section>
         </section>
-      ) : activeChannel === 'wecom' ? (
+      ) : null}
+
+      {activeChannel === 'feishu' ? (
+        <section className="social-channel-detail">
+          <div className="social-channel-detail-head">
+            <div>
+              <div className="eyebrow">Active Channel</div>
+              <h2>飞书通道</h2>
+              <p>消息接收使用飞书官方 Node SDK 长连接；飞书卡片按钮交互使用 Webhook 回调地址。</p>
+            </div>
+            <div className="social-channel-actions">
+              <button className="secondary-btn" type="button" onClick={() => navigate('/social-channels')}>
+                返回通道列表
+              </button>
+              <span className={'social-platform-status' + feishuStateClass}>{feishuState}</span>
+            </div>
+          </div>
+
+          <section className="social-overview">
+            <div className="social-metric">
+              <span>长连接状态</span>
+              <strong>{feishuStatus?.running ? '运行中' : '未运行'}</strong>
+              <small>{feishuStatus?.configured ? '应用已配置' : '请先保存 App ID / Secret'}</small>
+            </div>
+            <div className="social-metric">
+              <span>最近会话</span>
+              <strong>{feishuTargets.length}</strong>
+              <small>可直接用于消息投递和后续任务推送</small>
+            </div>
+            <div className="social-metric">
+              <span>自动回复</span>
+              <strong>{feishuStatus?.autoReplyEnabled ? '已开启' : '已关闭'}</strong>
+              <small>关闭后飞书来信仍会写入聊天流，但不会自动回复</small>
+            </div>
+            <div className="social-metric">
+              <span>卡片回调</span>
+              <strong>{feishuStatus?.cardCallbackEnabled ? '已准备' : '已关闭'}</strong>
+              <small>需要在开发者后台配置可访问的回调地址</small>
+            </div>
+          </section>
+
+          <section className="social-layout">
+            <div className="social-card">
+              <div className="social-card-head">
+                <div>
+                  <h2>飞书应用配置</h2>
+                  <p>留空的凭据字段会保留后端已保存值，不会因为这里为空而清掉已有配置。</p>
+                </div>
+              </div>
+
+              <div className="social-form">
+                <label className="social-field">
+                  <span>App ID</span>
+                  <input
+                    value={feishuForm.appId}
+                    onChange={(event) => updateFeishuField('appId', event.target.value)}
+                    placeholder={feishuStatus?.appIdMasked || 'cli_xxx'}
+                  />
+                </label>
+                <label className="social-field">
+                  <span>App Secret</span>
+                  <input
+                    type="password"
+                    value={feishuForm.appSecret}
+                    onChange={(event) => updateFeishuField('appSecret', event.target.value)}
+                    placeholder={feishuStatus?.hasAppSecret ? '已保存，留空则保持不变' : '填写 App Secret'}
+                  />
+                </label>
+                <label className="social-field">
+                  <span>Verification Token</span>
+                  <input
+                    value={feishuForm.verificationToken}
+                    onChange={(event) => updateFeishuField('verificationToken', event.target.value)}
+                    placeholder={feishuStatus?.hasVerificationToken ? '已保存，留空则保持不变' : '卡片回调校验可选'}
+                  />
+                </label>
+                <label className="social-field">
+                  <span>Encrypt Key</span>
+                  <input
+                    value={feishuForm.encryptKey}
+                    onChange={(event) => updateFeishuField('encryptKey', event.target.value)}
+                    placeholder={feishuStatus?.hasEncryptKey ? '已保存，留空则保持不变' : '加密推送可选'}
+                  />
+                </label>
+                <label className="social-field">
+                  <span>公网基础地址</span>
+                  <input
+                    value={feishuForm.callbackBaseUrl}
+                    onChange={(event) => updateFeishuField('callbackBaseUrl', event.target.value)}
+                    placeholder="https://your-domain.example.com"
+                  />
+                </label>
+
+                <div className="social-checks">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={feishuForm.enabled}
+                      onChange={(event) => updateFeishuField('enabled', event.target.checked)}
+                    />
+                    <span>保存后允许自动启动长连接</span>
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={feishuForm.autoReplyEnabled}
+                      onChange={(event) => updateFeishuField('autoReplyEnabled', event.target.checked)}
+                    />
+                    <span>收到飞书消息后自动调用 Agent 回复</span>
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={feishuForm.cardCallbackEnabled}
+                      onChange={(event) => updateFeishuField('cardCallbackEnabled', event.target.checked)}
+                    />
+                    <span>允许飞书卡片回调入口</span>
+                  </label>
+                </div>
+
+                <div className="social-account-actions">
+                  <button className="primary-btn" type="button" disabled={feishuSaving} onClick={() => void saveFeishuConfig()}>
+                    保存配置
+                  </button>
+                  {feishuStatus?.running ? (
+                    <button className="secondary-btn" type="button" disabled={feishuSaving} onClick={() => void disconnectFeishu()}>
+                      停止长连接
+                    </button>
+                  ) : (
+                    <button className="secondary-btn" type="button" disabled={feishuSaving} onClick={() => void connectFeishu()}>
+                      启动长连接
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {feishuStatus?.lastError ? <div className="social-error">{feishuStatus.lastError}</div> : null}
+            </div>
+
+            <div className="social-card">
+              <div className="social-card-head">
+                <div>
+                  <h2>回调与最近会话</h2>
+                  <p>飞书消息接收可直接走长连接；卡片按钮交互仍需要在开发者后台配置 Webhook 回调地址。</p>
+                </div>
+              </div>
+
+              <div className="social-code-block">
+                <strong>事件回调地址</strong>
+                <code>{feishuCallbackEventUrl || feishuStatus?.eventWebhookPath || '未生成'}</code>
+              </div>
+              <div className="social-code-block">
+                <strong>卡片回调地址</strong>
+                <code>{feishuCallbackCardUrl || feishuStatus?.cardWebhookPath || '未生成'}</code>
+              </div>
+
+              <div className="social-mini-grid">
+                <span>最近入站：{formatTime(feishuStatus?.lastInboundAt)}</span>
+                <span>最近出站：{formatTime(feishuStatus?.lastOutboundAt)}</span>
+                <span>最近事件：{formatTime(feishuStatus?.lastEventAt)}</span>
+                <span>保存时间：{formatTime(feishuStatus?.savedAt)}</span>
+              </div>
+
+              {feishuTargets.length === 0 ? (
+                <div className="social-empty-note">
+                  还没有记录到飞书会话。先在飞书里给机器人发消息，系统会自动把最近 chat_id 记录到这里。
+                </div>
+              ) : (
+                <div className="social-target-list">
+                  {feishuTargets.map((target) => (
+                    <button
+                      type="button"
+                      className={'social-target-item selectable' + (feishuSendReceiveId === target.receiveId ? ' active' : '')}
+                      key={target.receiveId}
+                      onClick={() => setFeishuSendReceiveId(target.receiveId)}
+                    >
+                      <div>
+                        <strong>{target.label}</strong>
+                        <span>{target.receiveId}</span>
+                      </div>
+                      <div className="social-target-meta">
+                        <span>{target.chatType === 'group' ? '群聊' : '单聊'}</span>
+                        <span>最近：{formatTime(target.lastMessageAt)}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="social-card">
+              <div className="social-card-head">
+                <div>
+                  <h2>飞书发送测试</h2>
+                  <p>先选中最近会话，或直接手动填写一个 chat_id。这里可以发送普通文本或测试交互卡片。</p>
+                </div>
+              </div>
+
+              <div className="social-form">
+                <label className="social-field">
+                  <span>receive_id (chat_id)</span>
+                  <input
+                    value={feishuSendReceiveId}
+                    onChange={(event) => setFeishuSendReceiveId(event.target.value)}
+                    placeholder="oc_xxx"
+                  />
+                </label>
+                <label className="social-field">
+                  <span>发送类型</span>
+                  <select
+                    value={feishuSendMode}
+                    onChange={(event) =>
+                      setFeishuSendMode(event.target.value as 'text' | 'card' | 'media')
+                    }
+                  >
+                    <option value="text">文本消息</option>
+                    <option value="card">测试交互卡片</option>
+                    <option value="media">媒体文件</option>
+                  </select>
+                </label>
+                {feishuSendMode === 'media' ? (
+                  <>
+                    <label className="social-field">
+                      <span>媒体模式</span>
+                      <select
+                        value={feishuSendMediaMode}
+                        onChange={(event) =>
+                          setFeishuSendMediaMode(
+                            event.target.value as 'auto' | 'image' | 'file' | 'audio' | 'media',
+                          )
+                        }
+                      >
+                        <option value="auto">自动判断</option>
+                        <option value="image">强制图片</option>
+                        <option value="file">强制文件</option>
+                        <option value="audio">强制音频</option>
+                        <option value="media">强制视频</option>
+                      </select>
+                    </label>
+                    <label className="social-field">
+                      <span>媒体文件</span>
+                      <input
+                        key={feishuSendFileKey}
+                        type="file"
+                        onChange={(event) => setFeishuSendFile(event.target.files?.[0] ?? null)}
+                      />
+                      {feishuSendFile ? (
+                        <small>
+                          已选择：{feishuSendFile.name} ·{' '}
+                          {Math.max(1, Math.round(feishuSendFile.size / 1024))} KB
+                        </small>
+                      ) : (
+                        <small>支持图片、文档、OPUS 音频、MP4 视频等飞书可接受的媒体。</small>
+                      )}
+                    </label>
+                  </>
+                ) : null}
+                <label className="social-field">
+                  <span>发送内容</span>
+                  <textarea
+                    rows={5}
+                    value={feishuSendText}
+                    onChange={(event) => setFeishuSendText(event.target.value)}
+                    placeholder="输入要发给飞书会话的内容"
+                  />
+                </label>
+                <div className="social-account-actions">
+                  <button className="primary-btn" type="button" disabled={feishuSending} onClick={() => void sendFeishuTestV2()}>
+                    发送测试
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+      ) : null}
+
+      {activeChannel === 'wecom' ? (
         <section className="social-channel-detail">
           <div className="social-channel-detail-head">
             <div>
               <div className="eyebrow">Active Channel</div>
               <h2>企业微信通道</h2>
-              <p>管理企业微信群机器人 Webhook，支持创建、编辑、测试和删除。</p>
+              <p>在这里管理企业微信群机器人 Webhook，支持新增、启停、测试和删除。</p>
             </div>
             <div className="social-channel-actions">
-              <button
-                className="secondary-btn"
-                type="button"
-                onClick={() => navigate('/social-channels')}
-              >
+              <button className="secondary-btn" type="button" onClick={() => navigate('/social-channels')}>
                 返回通道列表
               </button>
-              <span className="social-platform-status">{wecomWebhooks.length} 个 Webhook</span>
+              <span className={'social-platform-status' + wecomStateClass}>{wecomState}</span>
             </div>
           </div>
+
+          <section className="social-overview">
+            <div className="social-metric">
+              <span>Webhook 总数</span>
+              <strong>{wecomWebhooks.length}</strong>
+              <small>每个机器人都可以独立启停和测试</small>
+            </div>
+            <div className="social-metric">
+              <span>已启用</span>
+              <strong>{wecomWebhooks.filter((item) => item.enabled).length}</strong>
+              <small>停用后不会继续用于企业微信群通知</small>
+            </div>
+            <div className="social-metric">
+              <span>最近发送</span>
+              <strong>
+                {wecomWebhooks.some((item) => item.lastSentAt)
+                  ? formatTime(
+                      wecomWebhooks
+                        .map((item) => item.lastSentAt ?? 0)
+                        .sort((a, b) => b - a)[0],
+                    )
+                  : '暂无'}
+              </strong>
+              <small>可快速判断机器人是否已成功发出测试消息</small>
+            </div>
+            <div className="social-metric">
+              <span>当前用途</span>
+              <strong>群机器人</strong>
+              <small>适合做通知播报、任务结果回写和企业群同步提醒</small>
+            </div>
+          </section>
 
           <section className="social-layout">
             <div className="social-card">
               <div className="social-card-head">
                 <div>
                   <h2>Webhook 列表</h2>
-                  <p>已配置的企业微信群机器人 Webhook。</p>
+                  <p>保存在本地 `data/channels/wecom/`，不影响微信和飞书通道。</p>
                 </div>
               </div>
 
               {wecomWebhooks.length === 0 ? (
-                <div className="social-empty-note">还没有 Webhook。在右侧添加一个新的群机器人。</div>
+                <div className="social-empty-note">
+                  还没有企业微信机器人。先在企业微信群里添加机器人，然后把 Webhook URL 填到右侧。
+                </div>
               ) : (
                 <div className="social-account-list">
-                  {wecomWebhooks.map((wh) => (
-                    <article className="social-account-card" key={wh.id}>
+                  {wecomWebhooks.map((webhook) => (
+                    <article className="social-account-card" key={webhook.id}>
                       <div className="social-account-main">
                         <div>
-                          <div className="social-account-title">{wh.name}</div>
-                          <div className="social-account-id">{wh.webhookKey}</div>
+                          <div className="social-account-title">{webhook.name}</div>
+                          <div className="social-account-id">{webhook.webhookKey}</div>
                         </div>
-                        <span className={'social-status' + (wh.enabled ? ' running' : '')}>
-                          {wh.enabled ? '已启用' : '已禁用'}
+                        <span className={'social-status' + (webhook.enabled ? ' running' : '')}>
+                          {webhook.enabled ? '已启用' : '已停用'}
                         </span>
                       </div>
+
                       <div className="social-account-grid">
-                        <span>保存时间：{formatTime(wh.savedAt)}</span>
-                        <span>最近发送：{formatTime(wh.lastSentAt)}</span>
+                        <span>保存时间：{formatTime(webhook.savedAt)}</span>
+                        <span>最近发送：{formatTime(webhook.lastSentAt)}</span>
                       </div>
-                      {wh.lastError ? <div className="social-error">{wh.lastError}</div> : null}
+
+                      {webhook.lastError ? <div className="social-error">{webhook.lastError}</div> : null}
+
                       <div className="social-account-actions">
                         <button
-                          className={wh.enabled ? 'secondary-btn' : 'primary-btn'}
+                          className={webhook.enabled ? 'secondary-btn' : 'primary-btn'}
                           type="button"
-                          onClick={() => void toggleWecomWebhook(wh.id, !wh.enabled)}
+                          disabled={wecomTestingId === webhook.id}
+                          onClick={() => void toggleWecomWebhook(webhook.id, !webhook.enabled)}
                         >
-                          {wh.enabled ? '禁用' : '启用'}
+                          {webhook.enabled ? '停用' : '启用'}
                         </button>
                         <button
                           className="secondary-btn"
                           type="button"
-                          disabled={wecomTesting === wh.id || !wh.enabled}
-                          onClick={() => void testWecomWebhook(wh.id)}
+                          disabled={wecomTestingId === webhook.id || !webhook.enabled}
+                          onClick={() => void testWecomWebhook(webhook.id)}
                         >
-                          {wecomTesting === wh.id ? '发送中...' : '测试'}
+                          {wecomTestingId === webhook.id ? '处理中...' : '发送测试'}
                         </button>
-                        {wecomPendingDelete === wh.id ? (
+                        {wecomPendingDelete === webhook.id ? (
                           <>
                             <button
                               className="danger-btn"
                               type="button"
-                              onClick={() => void deleteWecomWebhook(wh.id)}
+                              disabled={wecomTestingId === webhook.id}
+                              onClick={() => void deleteWecomWebhook(webhook.id)}
                             >
                               确认删除
                             </button>
-                            <button className="secondary-btn" type="button" onClick={() => setWecomPendingDelete('')}>
+                            <button
+                              className="secondary-btn"
+                              type="button"
+                              onClick={() => setWecomPendingDelete('')}
+                            >
                               取消
                             </button>
                           </>
@@ -640,7 +1241,7 @@ export default function SocialChannels() {
                             className="icon-btn danger-ghost"
                             type="button"
                             title="删除 Webhook"
-                            onClick={() => setWecomPendingDelete(wh.id)}
+                            onClick={() => setWecomPendingDelete(webhook.id)}
                           >
                             <IconTrash size={15} />
                           </button>
@@ -655,52 +1256,59 @@ export default function SocialChannels() {
             <div className="social-card">
               <div className="social-card-head">
                 <div>
-                  <h2>添加 Webhook</h2>
-                  <p>输入企业微信群机器人的 Webhook URL 来创建新的推送通道。</p>
+                  <h2>添加机器人</h2>
+                  <p>支持多个企业微信群机器人并行接入。URL 需为官方群机器人 Webhook。</p>
                 </div>
               </div>
-              <form onSubmit={(e) => void createWecomWebhook(e)}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+              <form className="social-form" onSubmit={(event) => void createWecomWebhook(event)}>
+                <label className="social-field">
+                  <span>名称</span>
                   <input
                     className="social-wecom-input"
-                    placeholder="名称"
                     value={wecomFormName}
-                    onChange={(e) => setWecomFormName(e.target.value)}
+                    onChange={(event) => setWecomFormName(event.target.value)}
+                    placeholder="例如：运营通知群"
                   />
+                </label>
+                <label className="social-field">
+                  <span>Webhook URL</span>
                   <input
                     className="social-wecom-input"
-                    placeholder="Webhook URL"
                     value={wecomFormUrl}
-                    onChange={(e) => setWecomFormUrl(e.target.value)}
+                    onChange={(event) => setWecomFormUrl(event.target.value)}
+                    placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
                   />
+                </label>
+                <div className="social-account-actions">
                   <button className="primary-btn" type="submit" disabled={wecomSaving}>
-                    {wecomSaving ? '保存中...' : '添加'}
+                    {wecomSaving ? '保存中...' : '保存 Webhook'}
                   </button>
                 </div>
               </form>
             </div>
           </section>
         </section>
-      ) : isUnknownChannel ? (
+      ) : null}
+
+      {isUnknownChannel ? (
         <section className="social-channel-detail empty">
           <div className="social-empty-note">
-            未找到这个社交通道。请返回通道列表选择已接入的平台。
+            未找到这个社交通道。请返回通道列表，进入已接入的平台。
             <div className="social-empty-actions">
-              <button
-                className="secondary-btn"
-                type="button"
-                onClick={() => navigate('/social-channels')}
-              >
+              <button className="secondary-btn" type="button" onClick={() => navigate('/social-channels')}>
                 返回通道列表
               </button>
             </div>
           </div>
         </section>
-      ) : (
+      ) : null}
+
+      {!channel ? (
         <section className="social-channel-hint">
           <div className="social-empty-note">选择一个平台卡片，进入对应的二级页面完成接入和管理。</div>
         </section>
-      )}
+      ) : null}
     </div>
   )
 }

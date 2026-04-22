@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   CalendarApi,
   type CalendarEvent,
+  type ScheduledTaskFeishuDeliveryMode,
+  type ScheduledTaskFeishuReceiveIdType,
   type ScheduledTask,
   type ScheduledTaskInput,
   type ScheduledTaskMode,
@@ -10,7 +12,11 @@ import {
   type ScheduledTaskTarget,
   type ScheduledTaskWechatDeliveryMode,
 } from '../api/calendar'
-import { SocialChannelsApi, type WechatDeliveryTarget } from '../api/social-channels'
+import {
+  SocialChannelsApi,
+  type FeishuDeliveryTarget,
+  type WechatDeliveryTarget,
+} from '../api/social-channels'
 import {
   IconChevron,
   IconEdit,
@@ -65,6 +71,9 @@ type TaskForm = {
   deliveryMode: ScheduledTaskWechatDeliveryMode
   deliveryAccountId: string
   deliveryPeerId: string
+  feishuDeliveryMode: ScheduledTaskFeishuDeliveryMode
+  feishuReceiveIdType: ScheduledTaskFeishuReceiveIdType
+  feishuReceiveId: string
   enabled: boolean
 }
 
@@ -142,7 +151,7 @@ const describeTaskRule = (task: ScheduledTask) => {
   return `${task.mode === 'ongoing' ? '长期' : '循环'} · ${every} · ${task.time}`
 }
 
-const describeTaskDelivery = (task: ScheduledTask) => {
+export const describeTaskDelivery = (task: ScheduledTask) => {
   const wechat = task.delivery?.wechat
   if (!wechat || wechat.mode === 'auto') return '微信：自动推送到最近会话'
   if (wechat.mode === 'off') return '微信：不推送'
@@ -151,6 +160,27 @@ const describeTaskDelivery = (task: ScheduledTask) => {
 
 const deliveryTargetValue = (target: WechatDeliveryTarget) =>
   `${encodeURIComponent(target.accountId)}|${encodeURIComponent(target.peerId)}`
+
+const feishuDeliveryTargetValue = (target: FeishuDeliveryTarget) =>
+  `${encodeURIComponent(target.receiveIdType)}|${encodeURIComponent(target.receiveId)}`
+
+const describeTaskDeliverySummary = (task: ScheduledTask) => {
+  const wechat = task.delivery?.wechat
+  const feishu = task.delivery?.feishu
+  const wechatLabel =
+    !wechat || wechat.mode === 'auto'
+      ? '微信：自动'
+      : wechat.mode === 'off'
+        ? '微信：关闭'
+        : `微信：固定 ${wechat.accountId || '未填账号'} / ${wechat.peerId || '未填会话'}`
+  const feishuLabel =
+    !feishu || feishu.mode === 'auto'
+      ? '飞书：自动'
+      : feishu.mode === 'off'
+        ? '飞书：关闭'
+        : `飞书：固定 ${feishu.receiveIdType} / ${feishu.receiveId || '未填目标'}`
+  return `${wechatLabel} · ${feishuLabel}`
+}
 
 const emptyEventForm = (date: string): EventForm => ({
   title: '',
@@ -178,6 +208,9 @@ const emptyTaskForm = (date: string): TaskForm => ({
   deliveryMode: 'auto',
   deliveryAccountId: '',
   deliveryPeerId: '',
+  feishuDeliveryMode: 'auto',
+  feishuReceiveIdType: 'chat_id',
+  feishuReceiveId: '',
   enabled: true,
 })
 
@@ -186,6 +219,11 @@ const taskToForm = (task: ScheduledTask): TaskForm => {
     mode: 'auto' as ScheduledTaskWechatDeliveryMode,
     accountId: '',
     peerId: '',
+  }
+  const feishuDelivery = task.delivery?.feishu ?? {
+    mode: 'auto' as ScheduledTaskFeishuDeliveryMode,
+    receiveIdType: 'chat_id' as ScheduledTaskFeishuReceiveIdType,
+    receiveId: '',
   }
   return {
     title: task.title,
@@ -204,6 +242,9 @@ const taskToForm = (task: ScheduledTask): TaskForm => {
     deliveryMode: wechatDelivery.mode,
     deliveryAccountId: wechatDelivery.accountId,
     deliveryPeerId: wechatDelivery.peerId,
+    feishuDeliveryMode: feishuDelivery.mode,
+    feishuReceiveIdType: feishuDelivery.receiveIdType,
+    feishuReceiveId: feishuDelivery.receiveId,
     enabled: task.enabled,
   }
 }
@@ -218,6 +259,7 @@ export default function Calendar() {
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
   const [taskRuns, setTaskRuns] = useState<ScheduledTaskRun[]>([])
   const [deliveryTargets, setDeliveryTargets] = useState<WechatDeliveryTarget[]>([])
+  const [feishuTargets, setFeishuTargets] = useState<FeishuDeliveryTarget[]>([])
   const [eventForm, setEventForm] = useState<EventForm>(() => emptyEventForm(todayKey))
   const [taskForm, setTaskForm] = useState<TaskForm>(() => emptyTaskForm(todayKey))
   const [showEventForm, setShowEventForm] = useState(false)
@@ -287,9 +329,15 @@ export default function Calendar() {
 
   const loadDeliveryTargets = async () => {
     try {
-      setDeliveryTargets(await SocialChannelsApi.wechatDeliveryTargets())
+      const [wechatList, feishuList] = await Promise.all([
+        SocialChannelsApi.wechatDeliveryTargets().catch(() => []),
+        SocialChannelsApi.feishuDeliveryTargets().catch(() => []),
+      ])
+      setDeliveryTargets(wechatList)
+      setFeishuTargets(feishuList)
     } catch {
       setDeliveryTargets([])
+      setFeishuTargets([])
     }
   }
 
@@ -488,6 +536,11 @@ export default function Calendar() {
       return null
     }
 
+    if (taskForm.feishuDeliveryMode === 'fixed' && !taskForm.feishuReceiveId.trim()) {
+      showNotice('固定飞书推送需要填写 receiveId')
+      return null
+    }
+
     return {
       title,
       notes: taskForm.notes.trim(),
@@ -511,6 +564,14 @@ export default function Calendar() {
           accountId:
             taskForm.deliveryMode === 'fixed' ? taskForm.deliveryAccountId.trim() : '',
           peerId: taskForm.deliveryMode === 'fixed' ? taskForm.deliveryPeerId.trim() : '',
+        },
+        feishu: {
+          mode: taskForm.feishuDeliveryMode,
+          receiveIdType: taskForm.feishuReceiveIdType,
+          receiveId:
+            taskForm.feishuDeliveryMode === 'fixed'
+              ? taskForm.feishuReceiveId.trim()
+              : '',
         },
       },
       enabled: taskForm.enabled,
@@ -857,7 +918,7 @@ export default function Calendar() {
                     </div>
                     <div className="task-card-grid">
                       <span>目标：{task.target === 'agent' ? 'Agent 回调' : `终端 ${task.shell}`}</span>
-                      <span>{describeTaskDelivery(task)}</span>
+                      <span>{describeTaskDeliverySummary(task)}</span>
                       <span>下次：{formatTaskTimestamp(task.nextRunAt)}</span>
                       <span>上次：{formatTaskTimestamp(task.lastRunAt)}</span>
                       <span>
@@ -904,7 +965,7 @@ export default function Calendar() {
                   </div>
                   <div className="task-detail-row">
                     <strong>推送目标</strong>
-                    <span>{describeTaskDelivery(selectedTask)}</span>
+                    <span>{describeTaskDeliverySummary(selectedTask)}</span>
                   </div>
                   <div className="task-detail-row">
                     <strong>最近执行</strong>
@@ -1157,7 +1218,7 @@ export default function Calendar() {
                         onChange={(event) =>
                           setTaskForm((current) => ({ ...current, command: event.target.value }))
                         }
-                        placeholder="例如：Get-ChildItem C:\\Users\\YourName\\Desktop"
+                        placeholder="例如：Get-ChildItem C:\\Users\\lixia\\Desktop"
                       />
                     </label>
                   </>
@@ -1236,6 +1297,89 @@ export default function Calendar() {
                               }))
                             }
                             placeholder="from_user_id / peerId"
+                          />
+                        </label>
+                      </div>
+                    </>
+                  )}
+
+                  <label className="calendar-field">
+                    <span>飞书推送策略</span>
+                    <select
+                      value={taskForm.feishuDeliveryMode}
+                      onChange={(event) =>
+                        setTaskForm((current) => ({
+                          ...current,
+                          feishuDeliveryMode: event.target.value as ScheduledTaskFeishuDeliveryMode,
+                        }))
+                      }
+                    >
+                      <option value="auto">自动：最近飞书会话</option>
+                      <option value="fixed">固定：指定 receiveId</option>
+                      <option value="off">关闭：不推送到飞书</option>
+                    </select>
+                  </label>
+
+                  {taskForm.feishuDeliveryMode === 'fixed' && (
+                    <>
+                      <label className="calendar-field">
+                        <span>选择最近飞书会话</span>
+                        <select
+                          value=""
+                          onChange={(event) => {
+                            const target = feishuTargets.find(
+                              (item) => feishuDeliveryTargetValue(item) === event.target.value,
+                            )
+                            if (!target) return
+                            setTaskForm((current) => ({
+                              ...current,
+                              feishuReceiveIdType: target.receiveIdType,
+                              feishuReceiveId: target.receiveId,
+                            }))
+                          }}
+                        >
+                          <option value="">从最近飞书会话填充</option>
+                          {feishuTargets.map((target) => (
+                            <option
+                              key={feishuDeliveryTargetValue(target)}
+                              value={feishuDeliveryTargetValue(target)}
+                            >
+                              {target.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="calendar-time-row">
+                        <label className="calendar-field">
+                          <span>receiveIdType</span>
+                          <select
+                            value={taskForm.feishuReceiveIdType}
+                            onChange={(event) =>
+                              setTaskForm((current) => ({
+                                ...current,
+                                feishuReceiveIdType:
+                                  event.target.value as ScheduledTaskFeishuReceiveIdType,
+                              }))
+                            }
+                          >
+                            <option value="chat_id">chat_id</option>
+                            <option value="open_id">open_id</option>
+                            <option value="user_id">user_id</option>
+                            <option value="union_id">union_id</option>
+                            <option value="email">email</option>
+                          </select>
+                        </label>
+                        <label className="calendar-field">
+                          <span>receiveId</span>
+                          <input
+                            value={taskForm.feishuReceiveId}
+                            onChange={(event) =>
+                              setTaskForm((current) => ({
+                                ...current,
+                                feishuReceiveId: event.target.value,
+                              }))
+                            }
+                            placeholder="oc_xxx / ou_xxx / user_id"
                           />
                         </label>
                       </div>
