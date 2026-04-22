@@ -116,6 +116,7 @@ export default function SqlOrchestration() {
     { label: '添加 Debug 节点', action: 'add-debug' },
     { label: '添加 Load 节点', action: 'add-load' },
     { label: '添加 Wait 节点', action: 'add-wait' },
+    { label: '添加 Shell 节点', action: 'add-shell' },
     { label: '自动布局', action: 'auto-layout' },
   ]
 
