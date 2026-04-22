@@ -64,7 +64,7 @@ async function sleep(ms: number, signal: AbortSignal) {
  * Backoff uses 5s, 10s, 30s, 60s, 120s, then doubles from 120s until `maxMs`.
  *
  * `cancel()` aborts the pending wait or stops after the current attempt finishes. It does not
- * interrupt an in-flight task body.
+ * interrupt an in-flight task body. No further events are emitted after cancel() is called.
  */
 export function scheduleReconnect(
   task: () => Promise<boolean>,
