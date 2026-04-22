@@ -512,7 +512,7 @@ export async function startWechatAccount(accountIdInput: unknown) {
       current.lastError = sanitizeError(error)
     }
     // session-failure hook: schedule reconnect unless explicitly stopped
-    if (!signal.aborted) {
+    if (!controller.signal.aborted) {
       reconnectHandles.get(account.accountId)?.cancel()
       const handle = scheduleReconnect(
         async () => {
