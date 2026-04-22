@@ -111,7 +111,7 @@ function sliceLines(content: string, offsetInput: unknown, limitInput: unknown) 
   const offset = normalizeLimit(offsetInput, 1, Math.max(lines.length, 1))
   const limit =
     typeof limitInput === 'number' && Number.isFinite(limitInput)
-      ? normalizeLimit(limitInput, lines.length, lines.length)
+      ? Math.max(Math.min(Math.round(limitInput), lines.length), 1)
       : lines.length
   const start = Math.max(offset - 1, 0)
   const selected = lines.slice(start, start + limit)
@@ -597,6 +597,7 @@ export const filesystemTools: AgentTool[] = [
       const { stat, content } = await readUtf8File(target)
       assertExpectedUpdatedAt(stat, input.expectedUpdatedAt, 'editing')
 
+      if (!oldString) throw new HttpError(400, 'oldString must not be empty')
       const matches = content.split(oldString).length - 1
       if (matches === 0) throw new HttpError(400, 'oldString was not found in the file')
       if (matches > 1) throw new HttpError(400, `oldString matched ${matches} locations; provide more specific surrounding context`)

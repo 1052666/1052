@@ -603,7 +603,6 @@ async function handleInboundWechatMessage(
 
   const seenKey = buildSeenKey(account.accountId, message)
   if (await hasSeenWechatMessage(seenKey)) return
-  await markSeenWechatMessage(seenKey)
 
   if (message.context_token) {
     await setWechatContextToken(account.accountId, peerId, message.context_token)
@@ -611,6 +610,8 @@ async function handleInboundWechatMessage(
 
   const content = await buildWechatInboundContent(message)
   if (!content) return
+
+  await markSeenWechatMessage(seenKey)
 
   const userMessage = await appendChatMessage({
     role: 'user',

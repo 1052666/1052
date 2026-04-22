@@ -98,7 +98,7 @@ export const scheduleTools: AgentTool[] = [
       const input = (args ?? {}) as Record<string, unknown>
       const runs = await listScheduledTaskRuns(
         typeof input.taskId === 'string' ? input.taskId : undefined,
-        typeof input.limit === 'number' ? input.limit : 50,
+        typeof input.limit === 'number' ? Math.min(Math.max(input.limit, 1), 500) : 50,
       )
       return {
         count: runs.length,

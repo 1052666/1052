@@ -95,7 +95,7 @@ export const calendarTools: AgentTool[] = [
         startDate: input.startDate,
         endDate: input.endDate,
         keyword: input.keyword,
-        limit: input.limit,
+        limit: typeof input.limit === 'number' ? Math.min(Math.max(input.limit, 1), 50) : undefined,
       })
 
       return {

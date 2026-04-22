@@ -40,7 +40,11 @@ export const memoryTools: AgentTool[] = [
       },
       additionalProperties: false,
     },
-    execute: async (args) => listMemories((args ?? {}) as Record<string, unknown>),
+    execute: async (args) => {
+      const input = (args ?? {}) as Record<string, unknown>
+      if (typeof input.limit === 'number') input.limit = Math.min(Math.max(input.limit, 1), 300)
+      return listMemories(input)
+    },
   },
   {
     name: 'memory_read',
@@ -167,7 +171,11 @@ export const memoryTools: AgentTool[] = [
       },
       additionalProperties: false,
     },
-    execute: async (args) => listMemorySuggestions((args ?? {}) as Record<string, unknown>),
+    execute: async (args) => {
+      const input = (args ?? {}) as Record<string, unknown>
+      if (typeof input.limit === 'number') input.limit = Math.min(Math.max(input.limit, 1), 300)
+      return listMemorySuggestions(input)
+    },
   },
   {
     name: 'memory_suggest',
@@ -248,7 +256,11 @@ export const memoryTools: AgentTool[] = [
       },
       additionalProperties: false,
     },
-    execute: async (args) => listSecureMemories((args ?? {}) as Record<string, unknown>),
+    execute: async (args) => {
+      const input = (args ?? {}) as Record<string, unknown>
+      if (typeof input.limit === 'number') input.limit = Math.min(Math.max(input.limit, 1), 300)
+      return listSecureMemories(input)
+    },
   },
   {
     name: 'memory_secure_read',
