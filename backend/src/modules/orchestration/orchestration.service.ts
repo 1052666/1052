@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { HttpError } from '../../http-error.js'
 import { config } from '../../config.js'
-import { getDataSource, getSqlFile, resolveVariables } from '../sql/sql.service.js'
+import { getDataSource, getSqlFile, resolveVariables, getServer, getShellFile, executeShellOnServer, executeLocal } from '../sql/sql.service.js'
 import { executeDbQuery } from '../sql/sql.client.js'
 import type { Orchestration, OrchestrationInput, OrchestrationExecution, LogEntry, OrchestrationNode, OrchestrationEdge, ThresholdOperator, ColumnMapping } from './orchestration.types.js'
 
@@ -381,6 +381,38 @@ async function executeNode(node: OrchestrationNode, signal?: AbortSignal, pushLo
   if (signal?.aborted) throw new Error('已停止')
   if (node.type === 'wait') return executeWaitNode(node, pushLog || (() => {}), signal)
   if (node.type === 'load') return executeLoadNode(node)
+  if (node.type === 'shell') {
+    const nodeStart = Date.now()
+    try {
+      let script = node.shellContent || ''
+      if (node.shellFileId) {
+        try {
+          const file = await getShellFile(node.shellFileId)
+          script = file.content
+        } catch { /* fallback */ }
+      }
+      if (!script.trim()) throw new Error('未配置脚本内容')
+
+      const result = node.serverId
+        ? await executeShellOnServer(await getServer(node.serverId), script)
+        : await executeLocal(script)
+
+      return {
+        nodeId: node.id,
+        nodeName: node.name,
+        nodeType: 'shell',
+        status: result.exitCode === 0 ? 'success' : 'failed',
+        sql: script.slice(0, 500),
+        error: result.exitCode !== 0 ? result.stderr.slice(0, 500) : undefined,
+        result: { columns: ['stdout', 'stderr', 'exitCode', 'duration'], rows: [{ stdout: result.stdout.slice(0, 500), stderr: result.stderr.slice(0, 200), exitCode: result.exitCode, duration: result.duration }] },
+        actualValue: result.stdout.slice(0, 200).trim(),
+        timestamp: Date.now(),
+        duration: result.duration,
+      }
+    } catch (err) {
+      return { nodeId: node.id, nodeName: node.name, nodeType: 'shell', status: 'failed', sql: node.shellContent || '', error: err instanceof Error ? err.message : String(err), timestamp: Date.now(), duration: Date.now() - nodeStart }
+    }
+  }
   const nodeStart = Date.now()
   try {
     const resolved = await resolveNodeSql(node)

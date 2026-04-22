@@ -5,6 +5,7 @@ const NODE_OPTIONS: { type: OrchNodeType; label: string; desc: string; iconBg: s
   { type: 'debug', label: 'Debug 节点',  desc: '执行 SQL + 阈值检查',  iconBg: '#f59e0b' },
   { type: 'load',  label: '加载节点',    desc: '跨数据源数据传输',     iconBg: '#10b981' },
   { type: 'wait',  label: 'Wait 节点',   desc: '轮询等待 + 阈值检查',  iconBg: '#64748b' },
+  { type: 'shell', label: 'Shell 节点', desc: '执行 Shell 脚本',  iconBg: '#e11d48' },
 ]
 
 export function AddNodeDialog({

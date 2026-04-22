@@ -64,6 +64,55 @@ export type SqlVariablePayload = {
   datasourceId?: string
 }
 
+export type Server = {
+  id: string
+  name: string
+  host: string
+  port: number
+  user: string
+  authType: 'password' | 'privateKey'
+  password: string
+  privateKey: string
+  description: string
+  createdAt: number
+  updatedAt: number
+}
+
+export type ServerPayload = {
+  name: string
+  host: string
+  port?: number
+  user?: string
+  authType?: 'password' | 'privateKey'
+  password?: string
+  privateKey?: string
+  description?: string
+}
+
+export type ShellFile = {
+  id: string
+  name: string
+  serverId: string
+  content: string
+  description: string
+  createdAt: number
+  updatedAt: number
+}
+
+export type ShellFilePayload = {
+  name: string
+  serverId?: string
+  content?: string
+  description?: string
+}
+
+export type ShellResult = {
+  stdout: string
+  stderr: string
+  exitCode: number
+  duration: number
+}
+
 export const SqlApi = {
   // Data sources
   listDataSources: () => api.get<DataSource[]>('/sql/datasources'),
@@ -97,4 +146,26 @@ export const SqlApi = {
     api.put<SqlVariable>('/sql/variables/' + encodeURIComponent(id), payload),
   deleteVariable: (id: string) =>
     api.delete<{ ok: true }>('/sql/variables/' + encodeURIComponent(id)),
+
+  // Servers
+  listServers: () => api.get<Server[]>('/sql/servers'),
+  createServer: (payload: ServerPayload) =>
+    api.post<Server>('/sql/servers', payload),
+  updateServer: (id: string, payload: Partial<ServerPayload>) =>
+    api.put<Server>('/sql/servers/' + encodeURIComponent(id), payload),
+  deleteServer: (id: string) =>
+    api.delete<{ ok: true }>('/sql/servers/' + encodeURIComponent(id)),
+  testServer: (id: string) =>
+    api.post<{ ok: true }>('/sql/servers/' + encodeURIComponent(id) + '/test', {}),
+
+  // Shell Files
+  listShellFiles: () => api.get<ShellFile[]>('/sql/shell-files'),
+  createShellFile: (payload: ShellFilePayload) =>
+    api.post<ShellFile>('/sql/shell-files', payload),
+  updateShellFile: (id: string, payload: Partial<ShellFilePayload>) =>
+    api.put<ShellFile>('/sql/shell-files/' + encodeURIComponent(id), payload),
+  deleteShellFile: (id: string) =>
+    api.delete<{ ok: true }>('/sql/shell-files/' + encodeURIComponent(id)),
+  executeShellFile: (id: string) =>
+    api.post<ShellResult>('/sql/shell-files/' + encodeURIComponent(id) + '/execute', {}),
 }

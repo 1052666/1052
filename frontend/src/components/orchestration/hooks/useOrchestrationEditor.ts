@@ -15,7 +15,7 @@ import {
   type OrchestrationEdge,
 } from '../../../api/orchestration'
 
-export type OrchNodeType = 'sql' | 'debug' | 'load' | 'wait'
+export type OrchNodeType = 'sql' | 'debug' | 'load' | 'wait' | 'shell'
 
 function nid() { return `n-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}` }
 
@@ -55,7 +55,7 @@ export function useOrchestrationEditor(orch: Orchestration) {
 
   const addNode = useCallback((type: OrchNodeType) => {
     const offset = Math.random() * 300
-    const nameMap: Record<OrchNodeType, string> = { sql: 'SQL 节点', debug: 'Debug 节点', load: '加载节点', wait: 'Wait 节点' }
+    const nameMap: Record<OrchNodeType, string> = { sql: 'SQL 节点', debug: 'Debug 节点', load: '加载节点', wait: 'Wait 节点', shell: 'Shell 节点' }
     const newNode: OrchestrationNode = {
       id: nid(),
       name: nameMap[type],
@@ -66,6 +66,7 @@ export function useOrchestrationEditor(orch: Orchestration) {
       position: { x: 100 + offset, y: 100 + offset },
       ...(type === 'load' ? { targetDatasourceId: '', targetTable: '', mode: 'insert' as const } : {}),
       ...(type === 'wait' ? { waitIntervalSec: 60, waitTimeoutSec: 1800, waitStableCount: 2 } : {}),
+      ...(type === 'shell' ? { serverId: '', shellContent: '' } : {}),
     }
     setNodes((nds) => [...nds, toRfNode(newNode)])
   }, [])

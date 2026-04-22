@@ -5,7 +5,7 @@ export type ColumnMapping = { source: string; target: string; isPartition?: bool
 export type OrchestrationNode = {
   id: string
   name: string
-  type: 'sql' | 'debug' | 'load' | 'wait'
+  type: 'sql' | 'debug' | 'load' | 'wait' | 'shell'
   datasourceId: string
   sql: string
   sqlFileId?: string
@@ -20,6 +20,9 @@ export type OrchestrationNode = {
   waitIntervalSec?: number
   waitTimeoutSec?: number
   waitStableCount?: number
+  serverId?: string
+  shellContent?: string
+  shellFileId?: string
   position?: { x: number; y: number }
 }
 
@@ -49,7 +52,7 @@ export type OrchestrationInput = {
 export type LogEntry = {
   nodeId: string
   nodeName: string
-  nodeType: 'sql' | 'debug' | 'load' | 'wait'
+  nodeType: 'sql' | 'debug' | 'load' | 'wait' | 'shell'
   status: 'success' | 'failed' | 'warning' | 'skipped' | 'running'
   sql: string
   affectedRows?: number
