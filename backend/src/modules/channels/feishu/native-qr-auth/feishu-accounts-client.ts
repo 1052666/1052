@@ -98,7 +98,14 @@ async function postRegistration(
 export async function initRegistration(brand: FeishuBrand = 'feishu'): Promise<InitResponse> {
   const data = (await postRegistration(brand, { action: 'init' })) as Record<string, unknown>
 
-  const methods = Array.isArray(data['auth_methods']) ? (data['auth_methods'] as string[]) : []
+  // The actual field from Feishu is "supported_auth_methods"; fall back to
+  // the undocumented "auth_methods" alias in case it ever changes.
+  const methods: string[] = Array.isArray(data['supported_auth_methods'])
+    ? (data['supported_auth_methods'] as string[])
+    : Array.isArray(data['auth_methods'])
+      ? (data['auth_methods'] as string[])
+      : []
+
   if (!methods.includes('client_secret')) {
     throw new FeishuQrAuthError(
       `Server did not list client_secret as a supported auth method. Got: ${methods.join(', ')}`,

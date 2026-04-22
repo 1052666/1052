@@ -28,3 +28,10 @@ export {
   pollQrStatus,
   verifyTenantToken,
 } from './feishu-accounts-client.js'
+
+export type { WizardEvent, WizardStartResult, WizardStatus } from './setup-wizard.service.js'
+export { cancelWizardSession, startWizardSession, subscribeToSession } from './setup-wizard.service.js'
+
+export { hasExistingFeishuEnvKeys, writeEnvCredentials } from './env-writer.js'
+
+export { setupWizardRouter } from './setup-wizard.routes.js'
