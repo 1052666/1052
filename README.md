@@ -295,8 +295,8 @@ http://localhost:10052
 | 服务商 | Base URL | Model ID 示例 |
 | --- | --- | --- |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4.1-mini` |
-| MiniMax Global | `https://api.minimax.io/v1` | `MiniMax-M2` |
-| MiniMax 中国区 | `https://api.minimaxi.com/v1` | `MiniMax-M2` |
+| MiniMax Global | `https://api.minimax.io/v1` | `MiniMax-M2.7` |
+| MiniMax 中国区 | `https://api.minimaxi.com/v1` | `MiniMax-M2.7` |
 | Gemini OpenAI | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.5-flash` |
 | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
 | Moonshot | `https://api.moonshot.cn/v1` | `kimi-k2-0711-preview` |
@@ -304,6 +304,7 @@ http://localhost:10052
 | SiliconFlow | `https://api.siliconflow.cn/v1` | `Qwen/Qwen3-32B` |
 
 设置页在 LLM 的 API Key 一栏中会自动根据当前 Base URL / Model ID 判断供应商；当未配置 API Key 时，会显示“点击获取”并跳转到对应平台。
+MiniMax 端点会做兼容处理：如果填了 `https://api.minimax.io` / `https://api.minimaxi.com`（未带 `/v1`）或文档域名 `platform.minimax.io` / `platform.minimaxi.com`，后端会自动归一化到可调用的 OpenAI 兼容地址。
 
 API Key 获取地址汇总：
 

@@ -15,12 +15,12 @@ const LLM_ENDPOINT_PRESETS = [
   {
     name: 'MiniMax Global',
     baseUrl: 'https://api.minimax.io/v1',
-    modelId: 'MiniMax-M2',
+    modelId: 'MiniMax-M2.7',
   },
   {
     name: 'MiniMax 中国区',
     baseUrl: 'https://api.minimaxi.com/v1',
-    modelId: 'MiniMax-M2',
+    modelId: 'MiniMax-M2.7',
   },
   {
     name: 'Gemini OpenAI',
