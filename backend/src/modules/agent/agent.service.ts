@@ -4,6 +4,7 @@ import { httpError, HttpError } from '../../http-error.js'
 import { getSettings } from '../settings/settings.service.js'
 import { getChatHistory } from './agent.history.service.js'
 import { formatMemoryRuntimeContext } from '../memory/memory.service.js'
+import { formatOutputProfileRuntimeContext } from '../output-profiles/output-profile.service.js'
 import { formatSkillsRuntimeContext } from '../skills/skills.service.js'
 import {
   formatUapisDirectorySummary,
@@ -224,11 +225,12 @@ async function composeLegacyMessages(
 ): Promise<LLMConversationMessage[]> {
   const limitedHistory = history.slice(-Math.max(1, contextMessageLimit))
   const latestUserContent = latestUserMessage(limitedHistory)?.content ?? ''
-  const [systemPrompt, skillsContext, uapisContext, memoryContext] = await Promise.all([
+  const [systemPrompt, skillsContext, uapisContext, memoryContext, outputProfileContext] = await Promise.all([
     getAgentSystemPrompt(),
     formatSkillsRuntimeContext(),
     formatUapisRuntimeContext(),
     formatMemoryRuntimeContext(latestUserContent),
+    formatOutputProfileRuntimeContext(latestUserContent),
   ])
 
   const messages: LLMConversationMessage[] = [
@@ -241,6 +243,7 @@ async function composeLegacyMessages(
         formatPermissionBlock(fullAccess),
         formatAgentWorkspaceContext(),
         memoryContext,
+        outputProfileContext,
         skillsContext,
         uapisContext,
       ]
@@ -307,6 +310,8 @@ async function maybeBuildExtraSections(
   if (mountedPacks.includes('memory-pack')) {
     sections.push(await formatMemoryRuntimeContext(latestUserContent))
   }
+
+  sections.push(await formatOutputProfileRuntimeContext(latestUserContent))
 
   return sections
 }
@@ -454,13 +459,6 @@ async function* runProgressiveStream(
       contextMessageLimit: settings.agent.contextMessageLimit,
       fullAccess: settings.agent.fullAccess === true,
     })
-
-    if (mountedPacks.length === 0 && built.budgetReport.overLimit) {
-      throw httpError(
-        500,
-        `P0 prompt budget exceeded: ${built.budgetReport.tokens}/${built.budgetReport.limitTokens} tokens`,
-      )
-    }
 
     if (settings.agent.checkpointEnabled) {
       checkpoint = await patchCheckpoint(sessionId, {

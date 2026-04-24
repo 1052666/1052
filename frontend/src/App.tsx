@@ -5,6 +5,7 @@ import Calendar from './pages/Calendar'
 import Repository from './pages/Repository'
 import Notes from './pages/Notes'
 import Wiki from './pages/Wiki'
+import OutputProfiles from './pages/OutputProfiles'
 import Resources from './pages/Resources'
 import SearchSources from './pages/SearchSources'
 import Skills from './pages/Skills'
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/repository/:id" element={<Repository />} />
           <Route path="/notes" element={<Notes />} />
           <Route path="/wiki" element={<Wiki />} />
+          <Route path="/output-profiles" element={<OutputProfiles />} />
           <Route path="/resources" element={<Resources />} />
           <Route path="/memory" element={<Memory />} />
           <Route path="/social-channels" element={<SocialChannels />} />
