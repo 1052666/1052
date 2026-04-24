@@ -95,8 +95,8 @@ export const AgentApi = {
   saveHistory: (messages: StoredChatMessage[], reason: HistorySaveReason = 'sync') =>
     api.put<ChatHistory>('/agent/history', { messages, reason }),
 
-  compactHistory: (messages: StoredChatMessage[]) =>
-    api.post<CompactHistoryResponse>('/agent/history/compact', { messages }),
+  compactHistory: (messages: StoredChatMessage[], signal?: AbortSignal) =>
+    api.post<CompactHistoryResponse>('/agent/history/compact', { messages }, signal),
 
   chat: (messages: ChatMessage[]) =>
     api.post<{ message: ChatMessage }>('/agent/chat', { messages }),

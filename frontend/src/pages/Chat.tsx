@@ -630,6 +630,9 @@ export default function Chat() {
     const pending = [...messagesRef.current, userMsg, assistantMsg]
     const toCompact = [...messagesRef.current, userMsg]
 
+    const controller = new AbortController()
+    abortRef.current = controller
+
     commitMessages(pending)
     void persistMessages(pending)
     setLoading(true)
@@ -641,7 +644,7 @@ export default function Chat() {
       scrollToBottom('smooth')
     })
     try {
-      const result = await AgentApi.compactHistory(toStoredMessages(toCompact))
+      const result = await AgentApi.compactHistory(toStoredMessages(toCompact), controller.signal)
       const restored = result.messages.map((message) => ({ ...message }))
       commitMessages(restored)
       nextId.current =
@@ -651,12 +654,14 @@ export default function Chat() {
         scrollToBottom('auto')
       })
     } catch (e) {
-      const now = Date.now()
+      if (controller.signal.aborted) return
+      const errNow = Date.now()
+      const current = messagesRef.current
       const next = [
-        ...pending.filter((message) => message.id !== assistantId),
+        ...current.filter((message) => message.id !== assistantId),
         {
           ...assistantMsg,
-          ts: now,
+          ts: errNow,
           streaming: false,
           error: true,
           content: '上下文压缩失败：' + ((e as Error).message || '未知错误'),
@@ -665,6 +670,7 @@ export default function Chat() {
       commitMessages(next)
       void persistMessages(next)
     } finally {
+      if (abortRef.current === controller) abortRef.current = null
       setLoading(false)
     }
   }
