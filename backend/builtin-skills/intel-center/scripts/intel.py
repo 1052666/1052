@@ -112,23 +112,23 @@ SNAPSHOT_PATH = Path(__file__).parent / "market-snapshot.json"
 # ── RSS Sources ──────────────────────────────────────────────────────────────
 RSS_FEEDS = [
     # Politics
-    {"url": "http://feeds.bbci.co.uk/news/world/rss.xml",             "sector": "politics", "source": "BBC World"},
-    {"url": "https://www.aljazeera.com/xml/rss/all.xml",              "sector": "politics", "source": "Al Jazeera"},
-    {"url": "https://www.theguardian.com/world/rss",                   "sector": "politics", "source": "The Guardian"},
-    {"url": "https://foreignpolicy.com/feed/",                         "sector": "politics", "source": "Foreign Policy"},
-    {"url": "https://feeds.npr.org/1004/rss.xml",                      "sector": "politics", "source": "NPR World"},
-    {"url": "https://www.globaltimes.cn/rss/outbrain.xml",             "sector": "politics", "source": "Global Times"},
+    {"id": "rss-bbc-world",       "url": "http://feeds.bbci.co.uk/news/world/rss.xml", "sector": "politics", "source": "BBC World"},
+    {"id": "rss-al-jazeera",      "url": "https://www.aljazeera.com/xml/rss/all.xml",  "sector": "politics", "source": "Al Jazeera"},
+    {"id": "rss-guardian-world",  "url": "https://www.theguardian.com/world/rss",      "sector": "politics", "source": "The Guardian"},
+    {"id": "rss-foreign-policy",  "url": "https://foreignpolicy.com/feed/",            "sector": "politics", "source": "Foreign Policy"},
+    {"id": "rss-npr-world",       "url": "https://feeds.npr.org/1004/rss.xml",         "sector": "politics", "source": "NPR World"},
+    {"id": "rss-global-times",    "url": "https://www.globaltimes.cn/rss/outbrain.xml", "sector": "politics", "source": "Global Times"},
     # Finance
-    {"url": "https://feeds.reuters.com/Reuters/worldNews",             "sector": "finance",  "source": "Reuters World"},
-    {"url": "https://finance.yahoo.com/rss/topfinstories",             "sector": "finance",  "source": "Yahoo Finance"},
-    {"url": "https://www.caixin.com/rss/",                             "sector": "finance",  "source": "Caixin"},
+    {"id": "rss-reuters-world",   "url": "https://feeds.reuters.com/Reuters/worldNews", "sector": "finance", "source": "Reuters World"},
+    {"id": "rss-yahoo-finance",   "url": "https://finance.yahoo.com/rss/topfinstories", "sector": "finance", "source": "Yahoo Finance"},
+    {"id": "rss-caixin",          "url": "https://www.caixin.com/rss/",                 "sector": "finance", "source": "Caixin"},
     # Tech
-    {"url": "https://techcrunch.com/feed/",                            "sector": "tech",     "source": "TechCrunch"},
-    {"url": "http://feeds.arstechnica.com/arstechnica/index",          "sector": "tech",     "source": "Ars Technica"},
-    {"url": "https://www.theverge.com/rss/index.xml",                  "sector": "tech",     "source": "The Verge"},
-    {"url": "https://news.ycombinator.com/rss",                        "sector": "tech",     "source": "Hacker News"},
-    {"url": "https://www.technologyreview.com/feed/",                  "sector": "tech",     "source": "MIT Tech Review"},
-    {"url": "https://www.wired.com/feed/rss",                          "sector": "tech",     "source": "Wired"},
+    {"id": "rss-techcrunch",      "url": "https://techcrunch.com/feed/",                   "sector": "tech", "source": "TechCrunch"},
+    {"id": "rss-ars-technica",    "url": "http://feeds.arstechnica.com/arstechnica/index", "sector": "tech", "source": "Ars Technica"},
+    {"id": "rss-the-verge",       "url": "https://www.theverge.com/rss/index.xml",         "sector": "tech", "source": "The Verge"},
+    {"id": "rss-hacker-news",     "url": "https://news.ycombinator.com/rss",               "sector": "tech", "source": "Hacker News"},
+    {"id": "rss-mit-tech-review", "url": "https://www.technologyreview.com/feed/",          "sector": "tech", "source": "MIT Tech Review"},
+    {"id": "rss-wired",           "url": "https://www.wired.com/feed/rss",                  "sector": "tech", "source": "Wired"},
 ]
 RSS_MAX_PER_FEED = 5
 
@@ -162,24 +162,28 @@ HN_SECTOR_KEYWORDS = {
 SEARCH_ENGINES = [
     {
         "id": "bing-cn",
+        "source_id": "search-bing-cn",
         "name": "Bing CN",
         "template": "https://cn.bing.com/search?q={query}&ensearch=0",
         "region": "cn",
     },
     {
         "id": "bing-int",
+        "source_id": "search-bing-int",
         "name": "Bing INT",
         "template": "https://cn.bing.com/search?q={query}&ensearch=1",
         "region": "global",
     },
     {
         "id": "sogou-wechat",
+        "source_id": "search-sogou-wechat",
         "name": "Sogou WeChat",
         "template": "https://wx.sogou.com/weixin?type=2&query={query}",
         "region": "cn",
     },
     {
         "id": "duckduckgo",
+        "source_id": "search-duckduckgo",
         "name": "DuckDuckGo",
         "template": "https://duckduckgo.com/html/?q={query}",
         "region": "global",
@@ -217,6 +221,25 @@ CHINA_MARKET_STAGE_BUDGET_SECONDS = _env_float("INTEL_CENTER_CHINA_MARKET_BUDGET
 STARTED_AT = time.monotonic()
 STAGE_DEADLINE: Optional[float] = None
 WARNINGS: list[str] = []
+SOURCE_REGISTRY_ENABLED = os.environ.get("INTEL_CENTER_SOURCE_REGISTRY") == "1"
+ENABLED_SOURCE_IDS = {
+    item.strip()
+    for item in os.environ.get("INTEL_CENTER_ENABLED_SOURCES", "").split(",")
+    if item.strip()
+}
+DEFAULT_DISABLED_SOURCE_IDS = {"tencent-news"}
+SKIPPED_SOURCE_IDS: list[str] = []
+
+
+def _source_enabled(source_id: str) -> bool:
+    if SOURCE_REGISTRY_ENABLED:
+        return source_id in ENABLED_SOURCE_IDS
+    return source_id not in DEFAULT_DISABLED_SOURCE_IDS
+
+
+def _skip_source(source_id: str, label: str) -> None:
+    SKIPPED_SOURCE_IDS.append(source_id)
+    print(f"  [INFO] {label} disabled by Source Registry", file=sys.stderr)
 
 
 def _remaining_budget() -> Optional[float]:
@@ -420,6 +443,9 @@ def fetch_rss(url: str, source: str, sector: str, max_items: int) -> list[dict]:
 def collect_gnews() -> list[dict]:
     """Google News RSS search across 3 sectors."""
     _begin_stage(GNEWS_STAGE_BUDGET_SECONDS)
+    if not _source_enabled("google-news-rss"):
+        _skip_source("google-news-rss", "Google News RSS")
+        return []
     seen, results = set(), []
     for sector, query in GNEWS_QUERIES:
         url = GNEWS_BASE + urllib.parse.quote(query)
@@ -466,6 +492,14 @@ def collect_market() -> dict:
     signals = {}
     anomalies = []
     by_sector = {"politics": [], "finance": [], "tech": []}
+    if not _source_enabled("yahoo-finance"):
+        _skip_source("yahoo-finance", "Yahoo Finance market data")
+        return {
+            "signals": signals,
+            "anomalies": anomalies,
+            "by_sector": by_sector,
+            "snapshot_enabled": False,
+        }
 
     print("  Collecting market signals...", file=sys.stderr)
     for key, cfg in MARKET_ASSETS.items():
@@ -490,7 +524,12 @@ def collect_market() -> dict:
     else:
         print("  Market signals normal", file=sys.stderr)
 
-    return {"signals": signals, "anomalies": anomalies, "by_sector": by_sector}
+    return {
+        "signals": signals,
+        "anomalies": anomalies,
+        "by_sector": by_sector,
+        "snapshot_enabled": True,
+    }
 
 
 def collect_rss() -> list[dict]:
@@ -499,6 +538,9 @@ def collect_rss() -> list[dict]:
     seen, results = set(), []
     print(f"  Collecting {len(RSS_FEEDS)} RSS feeds...", file=sys.stderr)
     for feed in RSS_FEEDS:
+        if not _source_enabled(feed["id"]):
+            _skip_source(feed["id"], feed["source"])
+            continue
         items = fetch_rss(feed["url"], feed["source"], feed["sector"], RSS_MAX_PER_FEED)
         for item in items:
             if item["url"] not in seen:
@@ -519,6 +561,9 @@ def _hn_classify_sector(title: str) -> str:
 def collect_hackernews() -> list[dict]:
     """Collect top stories from Hacker News, classify by sector."""
     _begin_stage(HN_STAGE_BUDGET_SECONDS)
+    if not _source_enabled("hacker-news"):
+        _skip_source("hacker-news", "Hacker News API")
+        return []
     seen, results = set(), []
     print("  Collecting Hacker News...", file=sys.stderr)
     raw_algolia = _http_get(HN_ALGOLIA_URL, timeout=HN_INDEX_TIMEOUT)
@@ -644,6 +689,9 @@ def collect_search_engines() -> list[dict]:
     print("  Collecting from search engines...", file=sys.stderr)
     for sector, query in SEARCH_QUERIES:
         for engine in SEARCH_ENGINES:
+            if not _source_enabled(engine["source_id"]):
+                _skip_source(engine["source_id"], engine["name"])
+                continue
             url = engine["template"].replace("{query}", urllib.parse.quote(query))
             raw = _http_get(url, timeout=SEARCH_TIMEOUT)
             if not raw:
@@ -749,6 +797,11 @@ def collect_china_market() -> dict:
         "ah_premium": None, "limit_up": 0, "limit_down": 0,
         "error": [],
     }
+    if not _source_enabled("china-market-akshare"):
+        result["skipped"] = "source disabled"
+        _skip_source("china-market-akshare", "A/H stock data")
+        return result
+
     timeout = _budgeted_timeout(CHINA_MARKET_STAGE_BUDGET_SECONDS)
     if timeout is None:
         result["error"].append("budget exhausted before A/H stock data")
@@ -797,6 +850,15 @@ def collect_china_market() -> dict:
     return result
 
 
+def collect_tencent_news() -> list[dict]:
+    """Reserved Tencent News source slot; adapter is intentionally gated by the registry."""
+    if not _source_enabled("tencent-news"):
+        _skip_source("tencent-news", "Tencent News")
+        return []
+    _warn("Tencent News source is enabled, but the collector adapter is not implemented yet")
+    return []
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -819,7 +881,10 @@ def main():
     now_ts = datetime.now().isoformat(timespec="seconds")
     snapshot = load_snapshot()
     market_delta = compute_market_delta(market["signals"], snapshot)
-    save_snapshot(market["signals"], now_ts)
+    if market.get("snapshot_enabled") and market["signals"]:
+        save_snapshot(market["signals"], now_ts)
+    else:
+        market_delta["snapshot_skipped"] = True
     if market_delta["deltas"]:
         print(f"  {len(market_delta['deltas'])} significant changes, direction: {market_delta['risk_direction']}", file=sys.stderr)
     else:
@@ -849,6 +914,11 @@ def main():
         print(f"  Warnings: {'; '.join(errors)}", file=sys.stderr)
     print("", file=sys.stderr)
 
+    # Step 7: Tencent News reserved source
+    print("[Step 7] Tencent News (optional)", file=sys.stderr)
+    tencent_items = collect_tencent_news()
+    print(f"  Total: {len(tencent_items)}\n", file=sys.stderr)
+
     # Output JSON
     output = {
         "date": date_str,
@@ -862,8 +932,12 @@ def main():
         "hackernews":    {"total": len(hn_items),      "items": hn_items},
         "search_engines":{"total": len(search_items),  "items": search_items},
         "china_market":  china_market,
+        "tencent_news":  {"total": len(tencent_items), "items": tencent_items},
         "diagnostics": {
             "elapsed_seconds": round(time.monotonic() - STARTED_AT, 2),
+            "source_registry_enabled": SOURCE_REGISTRY_ENABLED,
+            "enabled_source_ids": sorted(ENABLED_SOURCE_IDS) if SOURCE_REGISTRY_ENABLED else None,
+            "skipped_source_ids": sorted(set(SKIPPED_SOURCE_IDS)),
             "request_timeout_seconds": REQUEST_TIMEOUT,
             "search_timeout_seconds": SEARCH_TIMEOUT,
             "hn_index_timeout_seconds": HN_INDEX_TIMEOUT,

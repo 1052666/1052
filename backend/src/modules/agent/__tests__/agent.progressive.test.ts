@@ -16,7 +16,7 @@ import {
   summarizeCheckpointForInjection,
 } from '../agent.checkpoint.service.js'
 import { buildP0Messages } from '../agent.p0.service.js'
-import { hasAgentTool } from '../agent.tool.service.js'
+import { getAgentToolDefinitionsForNames, hasAgentTool } from '../agent.tool.service.js'
 import { terminalTools } from '../tools/terminal.tools.js'
 import { isReadonlyTerminalCommandAllowed } from '../../terminal/terminal.service.js'
 
@@ -66,6 +66,13 @@ describe('agent progressive disclosure helpers', () => {
 
   it('exposes UAPIs as discoverable search-pack capability in P0', async () => {
     expect(describePackForRouting('search-pack')).toContain('UAPIs')
+    const sourceToggleSchema = getAgentToolDefinitionsForNames(['websearch_set_source_enabled'])
+      .at(0)
+      ?.function.parameters as {
+        properties?: { family?: { enum?: string[] } }
+      } | undefined
+    const sourceToggle = sourceToggleSchema?.properties?.family?.enum
+    expect(sourceToggle).toContain('intel-source')
 
     const built = await buildP0Messages({
       history: [],

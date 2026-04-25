@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { HttpError } from '../../http-error.js'
 import { readSkill } from '../skills/skills.service.js'
+import { listEnabledIntelSourceIds } from '../websearch/websearch.service.js'
 
 const DEFAULT_TIMEOUT_MS = 180_000
 const MAX_TIMEOUT_MS = 600_000
@@ -63,6 +64,7 @@ export async function collectIntelCenterData(input: {
   timeoutMs?: unknown
 } = {}): Promise<IntelCenterCollectionResult> {
   const { skillRoot, scriptPath } = await resolveIntelCenterScript()
+  const enabledSourceIds = await listEnabledIntelSourceIds()
   const timeoutMs = normalizeTimeoutMs(input.timeoutMs)
   const command = pythonCommand()
   const startedAt = Date.now()
@@ -78,6 +80,8 @@ export async function collectIntelCenterData(input: {
       env: {
         ...process.env,
         FORCE_COLOR: '0',
+        INTEL_CENTER_ENABLED_SOURCES: enabledSourceIds.join(','),
+        INTEL_CENTER_SOURCE_REGISTRY: '1',
         INTEL_CENTER_TOTAL_BUDGET_SECONDS: collectorBudgetSeconds(timeoutMs),
         NO_COLOR: '1',
         PYTHONUNBUFFERED: '1',
