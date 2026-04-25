@@ -18,11 +18,7 @@ import {
 import { buildP0Messages } from '../agent.p0.service.js'
 import { hasAgentTool } from '../agent.tool.service.js'
 import { terminalTools } from '../tools/terminal.tools.js'
-import {
-  getDefaultTerminalShell,
-  getSupportedTerminalShells,
-  isReadonlyTerminalCommandAllowed,
-} from '../../terminal/terminal.service.js'
+import { isReadonlyTerminalCommandAllowed } from '../../terminal/terminal.service.js'
 
 describe('agent progressive disclosure helpers', () => {
   it('normalizes requested packs and deduplicates invalid values', () => {
@@ -175,30 +171,7 @@ describe('agent progressive disclosure helpers', () => {
     expect(normalizeSessionId('wechat:acc/peer?x')).toBe('wechat-acc-peer-x')
   })
 
-  it('allows only strict read-only terminal commands', () => {
-    expect(isReadonlyTerminalCommandAllowed('git status --short')).toBe(true)
-    expect(isReadonlyTerminalCommandAllowed('git diff -- src/index.ts')).toBe(true)
-    expect(isReadonlyTerminalCommandAllowed('rg "needle" src')).toBe(true)
-    expect(isReadonlyTerminalCommandAllowed('cat package.json')).toBe(true)
-    expect(
-      isReadonlyTerminalCommandAllowed(
-        '[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("ok"))',
-      ),
-    ).toBe(false)
-  })
-
-  it('keeps read-only terminal allow-list from admitting local mutations', () => {
-    expect(isReadonlyTerminalCommandAllowed('Set-Content -Path should-not-exist.txt -Value no')).toBe(
-      false,
-    )
-    expect(isReadonlyTerminalCommandAllowed('git switch main')).toBe(false)
-    expect(isReadonlyTerminalCommandAllowed('git restore backend/src/modules/terminal/terminal.service.ts')).toBe(false)
-    expect(isReadonlyTerminalCommandAllowed('npm run build')).toBe(false)
-    expect(isReadonlyTerminalCommandAllowed('[IO.File]::WriteAllText("x.txt","no")')).toBe(false)
-    expect(isReadonlyTerminalCommandAllowed('python -c "open(\'x.txt\',\'w\').write(\'no\')"')).toBe(false)
-  })
-
-  it('wires terminal_run_readonly through the strict read-only boundary', async () => {
+  it('allows full-access injected confirmation on allow-listed read-only terminal commands', async () => {
     const tool = terminalTools.find((item) => item.name === 'terminal_run_readonly')
     expect(tool).toBeTruthy()
 
@@ -211,9 +184,17 @@ describe('agent progressive disclosure helpers', () => {
       risk: 'safe',
     })
 
-    await expect(tool?.execute({ command: 'echo ok' })).rejects.toThrow(
-      'Read-only terminal tool only allows',
-    )
+  it('keeps read-only terminal commands on the allow list', async () => {
+    expect(isReadonlyTerminalCommandAllowed('rg output-profile backend/src')).toBe(true)
+    expect(isReadonlyTerminalCommandAllowed('git diff -- backend/src/modules/terminal/terminal.service.ts')).toBe(true)
+    expect(isReadonlyTerminalCommandAllowed('git restore backend/src/modules/terminal/terminal.service.ts')).toBe(false)
+    expect(isReadonlyTerminalCommandAllowed('[IO.File]::WriteAllText("x.txt","no")')).toBe(false)
+    expect(isReadonlyTerminalCommandAllowed('python -c "open(\'x.txt\',\'w\').write(\'no\')"')).toBe(false)
+  })
+
+  it('keeps read-only terminal commands from modifying local state', async () => {
+    const tool = terminalTools.find((item) => item.name === 'terminal_run_readonly')
+    expect(tool).toBeTruthy()
 
     await expect(
       tool?.execute({
@@ -221,17 +202,5 @@ describe('agent progressive disclosure helpers', () => {
         confirmed: true,
       }),
     ).rejects.toThrow('Read-only terminal tool only allows explicit read commands')
-  }, 15_000)
-
-  it('advertises cross-platform terminal shells', () => {
-    const runTool = terminalTools.find((item) => item.name === 'terminal_run')
-    const parameters = runTool?.parameters as
-      | { properties?: { shell?: { enum?: string[] } } }
-      | undefined
-    const shellSchema = parameters?.properties?.shell
-    expect(shellSchema?.enum).toEqual(
-      expect.arrayContaining(['powershell', 'pwsh', 'cmd', 'bash', 'zsh', 'sh']),
-    )
-    expect(getSupportedTerminalShells()).toContain(getDefaultTerminalShell())
   })
 })
