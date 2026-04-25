@@ -192,6 +192,9 @@ describe('agent progressive disclosure helpers', () => {
 
   it('advertises Intel Center as the preferred news and brief route in P0', async () => {
     expect(describePackForRouting('skill-pack')).toContain('intel-center')
+    const toolNames = getToolNamesForMountedPacks(expandMountedPacks(['skill-pack']))
+    expect(toolNames).toContain('intel_center_collect')
+    expect(hasAgentTool('intel_center_collect')).toBe(true)
 
     const built = await buildP0Messages({
       history: [],
@@ -202,6 +205,7 @@ describe('agent progressive disclosure helpers', () => {
     const system = built.messages[0]?.content ?? ''
     expect(system).toContain('intel-center')
     expect(system).toContain('skill-pack')
+    expect(system).toContain('intel_center_collect')
     expect(system).toContain('intel_brief_format')
     expect(system).toContain('does not collect intelligence')
   })

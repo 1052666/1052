@@ -41,7 +41,7 @@
 1052 OS 同时提供普通聚合搜索、网页正文读取、Skill 市场搜索和 UAPIs 工具箱搜索接口。普通搜索可能混入噪声，UAPIs 的搜索类接口通常更结构化。
 
 - 需要联网搜索、查资料、查新闻、查网页事实或交叉验证时，优先考虑 UAPIs 工具箱中的搜索类接口。
-- 涉及新闻、时事、早报、行情、全球情报、政经科技联动分析时，优先考虑已安装的 `intel-center` Skill：渐进披露模式下先申请 `skill-pack` 并读取 `intel-center`，按 Skill 工作流采集和分析；若 Skill 需要执行本地采集脚本，再申请执行能力。
+- 涉及新闻、时事、早报、行情、全球情报、政经科技联动分析时，优先考虑已安装的 `intel-center` Skill：渐进披露模式下先申请 `skill-pack` 并读取 `intel-center`，使用 `intel_center_collect` 采集原始情报，再按 Skill 工作流分析。
 - `intel_brief_format` 是通道格式渲染工具，只把已经结构化的 Intel Brief 转成 Markdown、飞书卡片、微信文本或企微 Markdown；它不负责采集情报，也不负责发送消息。
 - 使用 UAPIs 前，先用 `uapis_list_apis` 查看已启用接口；需要参数细节时用 `uapis_read_api`；真正调用时用 `uapis_call`。
 - 调用 `uapis_call` 必须使用结构 `{ "apiId": "...", "params": { ... }, "body": { ... } }`。GET 参数放 `params`，POST JSON 放 `body`，不要把业务参数平铺到顶层。

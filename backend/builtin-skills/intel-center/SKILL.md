@@ -19,6 +19,16 @@ A comprehensive global intelligence collection and analysis skill for 1052 OS.
 
 ## Quick Start
 
+In 1052 OS Agent mode, prefer the system tool:
+
+```text
+intel_center_collect
+```
+
+The tool runs this Skill's collector from the correct Skill directory and returns the collected JSON for analysis.
+
+Manual fallback:
+
 Run the collection script:
 
 ```bash
@@ -26,6 +36,7 @@ python3 scripts/intel.py 2>&1
 ```
 
 The script outputs JSON to stdout with all collected data. Progress goes to stderr.
+When running manually, set the current working directory to the directory containing this `SKILL.md`; `scripts/intel.py` is relative to that directory.
 
 Then analyze the JSON output following the workflow below.
 
