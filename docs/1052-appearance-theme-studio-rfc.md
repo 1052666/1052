@@ -256,6 +256,23 @@ Preview Matrix 必须使用固定 mock 内容，不依赖真实业务数据。
 - 避免预览随业务数据漂移。
 - 避免泄露用户内容。
 
+实现上建议把 Preview Matrix 做成独立前端组件：
+
+```ts
+type ThemePreviewMatrixProps = {
+  theme: ThemeSpec
+  review: AppearanceReviewReport
+  density?: 'compact' | 'full'
+}
+```
+
+约束：
+
+- 组件只接收 `ThemeSpec` 和 `AppearanceReviewReport`。
+- `compact` 可用于主题卡片，`full` 用于 apply 确认面板。
+- apply 确认面板必须展示 `full` Preview Matrix。
+- Review Checklist 必须来自后端 review report，不读取真实业务状态。
+
 ## 11. API 草案
 
 ```text
