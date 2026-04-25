@@ -162,7 +162,16 @@ export default function Settings() {
   const [providerCachingEnabled, setProviderCachingEnabled] = useState(true)
   const [checkpointEnabled, setCheckpointEnabled] = useState(true)
   const [seedOnResumeEnabled, setSeedOnResumeEnabled] = useState(true)
-  const [zhipuExpanded, setZhipuExpanded] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
+  const toggleGroup = (name: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
   const [upgradeDebugEventsEnabled, setUpgradeDebugEventsEnabled] = useState(true)
   const [state, setState] = useState<SaveState>('idle')
   const [error, setError] = useState('')
@@ -439,25 +448,24 @@ export default function Settings() {
                   ))}
                   <div className="settings-preset-group">
                     <button
-                      className={`settings-preset-card${zhipuExpanded ? ' expanded' : ''}`}
+                      className={`settings-preset-card${expandedGroups.has(ZHIPU_PRESETS.name) ? ' expanded' : ''}`}
                       type="button"
-                      onClick={() => setZhipuExpanded((v) => !v)}
+                      onClick={() => toggleGroup(ZHIPU_PRESETS.name)}
+                      aria-expanded={expandedGroups.has(ZHIPU_PRESETS.name)}
+                      aria-controls="preset-group-zhipu"
                     >
                       <strong>{ZHIPU_PRESETS.name}</strong>
-                      <span>{ZHIPU_PRESETS.children.length} 个端点</span>
-                      <small>{zhipuExpanded ? '点击收起' : '点击展开'}</small>
+                      <span>{t(`${ZHIPU_PRESETS.children.length} 个端点`, `${ZHIPU_PRESETS.children.length} endpoints`)}</span>
+                      <small>{expandedGroups.has(ZHIPU_PRESETS.name) ? t('点击收起', 'Collapse') : t('点击展开', 'Expand')}</small>
                     </button>
-                    {zhipuExpanded && (
-                      <div className="settings-preset-subgrid">
+                    {expandedGroups.has(ZHIPU_PRESETS.name) && (
+                      <div id="preset-group-zhipu" className="settings-preset-subgrid" role="group" aria-label={t(`${ZHIPU_PRESETS.name} 端点列表`, `${ZHIPU_PRESETS.name} endpoints`)}>
                         {ZHIPU_PRESETS.children.map((child) => (
                           <button
                             key={child.name}
                             className="settings-preset-card settings-preset-sub"
                             type="button"
-                            onClick={() => {
-                              applyLlmPreset(child)
-                              setZhipuExpanded(false)
-                            }}
+                            onClick={() => applyLlmPreset(child)}
                           >
                             <strong>{child.name}</strong>
                             <span>{child.baseUrl}</span>

@@ -3843,8 +3843,9 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .settings-preset-card.settings-preset-sub {
-  padding-left: 20px;
-  border-left: 3px solid var(--accent-ring);
+  padding-left: 16px;
+  border: 1px solid var(--hairline);
+  box-shadow: inset 3px 0 0 var(--accent-ring);
 }
 
 .settings-input {
