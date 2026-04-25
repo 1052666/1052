@@ -18,14 +18,6 @@ import { summarizeCheckpointForInjection } from './agent.checkpoint.service.js'
 import { formatUapisDirectorySummary } from '../uapis/uapis.service.js'
 import type { AgentCheckpoint, AgentPackName } from './agent.runtime.types.js'
 import type { LLMConversationMessage, LLMToolDefinition } from './llm.client.js'
-import {
-  CONTEXT_UPGRADE_TOOL_SCHEMA_TOKEN_BUDGET,
-  P0_TOTAL_TOKEN_BUDGET,
-  P0_UAPIS_DIRECTORY_TOKEN_BUDGET,
-  buildTokenBudgetReport,
-  textBudgetComponent,
-  toolSchemaBudgetComponent,
-} from './agent.budget.service.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT_DIR = path.resolve(__dirname, '..', '..', '..', '..')
@@ -151,6 +143,7 @@ export async function buildP0Messages(input: {
     getProjectProfileSummary(),
     getP0UapisSummary(),
   ])
+  const coreRules = [coreRuleFiles.core, coreRuleFiles.local].filter(Boolean).join('\n\n')
   const checkpointSummary = summarizeCheckpointForInjection(input.checkpoint)
   const mountedPacksSummary = renderMountedPacks(input.mountedPacks ?? [])
   const extraSections = input.extraSections ?? []
