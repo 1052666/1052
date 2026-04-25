@@ -18,11 +18,19 @@ import { summarizeCheckpointForInjection } from './agent.checkpoint.service.js'
 import { formatUapisDirectorySummary } from '../uapis/uapis.service.js'
 import type { AgentCheckpoint, AgentPackName } from './agent.runtime.types.js'
 import type { LLMConversationMessage, LLMToolDefinition } from './llm.client.js'
+import {
+  CONTEXT_UPGRADE_TOOL_SCHEMA_TOKEN_BUDGET,
+  P0_TOTAL_TOKEN_BUDGET,
+  P0_UAPIS_DIRECTORY_TOKEN_BUDGET,
+  buildTokenBudgetReport,
+  textBudgetComponent,
+  toolSchemaBudgetComponent,
+} from './agent.budget.service.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT_DIR = path.resolve(__dirname, '..', '..', '..', '..')
 
-let cachedCoreRules: string | null = null
+let cachedCoreRuleFiles: { core: string; local: string } | null = null
 let cachedProjectProfile: string | null = null
 
 async function readOptionalFile(target: string) {
@@ -33,14 +41,14 @@ async function readOptionalFile(target: string) {
   }
 }
 
-async function getCoreRules() {
-  if (cachedCoreRules !== null) return cachedCoreRules
+async function getCoreRuleFiles() {
+  if (cachedCoreRuleFiles !== null) return cachedCoreRuleFiles
   const [core, local] = await Promise.all([
     readOptionalFile(path.join(ROOT_DIR, '1052.md')),
     readOptionalFile(path.join(ROOT_DIR, '1052.local.md')),
   ])
-  cachedCoreRules = [core, local].filter(Boolean).join('\n\n').trim()
-  return cachedCoreRules
+  cachedCoreRuleFiles = { core, local }
+  return cachedCoreRuleFiles
 }
 
 async function getProjectProfileSummary() {
@@ -96,9 +104,11 @@ function getRoutingPrompt() {
     '- Start in P0 with no business tools.',
     '- If you need local code, local files, or readonly terminal inspection, request repo-pack.',
     '- If you need web search, page reading, or UAPIs lookup/call, request search-pack.',
-    '- If you need to read, create, update, delete, suggest, confirm, or reject long-term memories, request memory-pack.',
+    '- If you need to read, create, update, delete, suggest, confirm, or reject long-term memories or output profiles, request memory-pack.',
     '- If you need to read or maintain Wiki, ingest raw files, search structured knowledge pages, write synthesis, or lint Wiki health, request data-pack.',
     '- Wiki is not long-term memory: Wiki stores knowledge assets and source-backed synthesis; memory-pack stores durable user preferences, constraints, identity, and habits.',
+    '- Output profiles are not raw knowledge storage: they are composition recipes that combine approved cognitive models, preferred writing style, and material scopes for a response.',
+    '- If an output profile references Wiki/raw/material sources and the task needs the actual source content, request data-pack and read the referenced material instead of inventing it.',
     '- For Wiki ingestion, read raw, summarize 3-5 key points and page split suggestions, then wait for confirmation before write tools unless full-access is enabled.',
     '- For valuable answers that should be preserved, ask whether to write them into 综合分析/ before wiki_query_writeback unless full-access is enabled.',
     '- For Wiki lint, preview first; automatic fixes, index rebuilds, and log appends are write operations that require confirmation unless full-access is enabled.',
@@ -136,8 +146,8 @@ export async function buildP0Messages(input: {
   mountedPacks?: readonly AgentPackName[]
   extraSections?: string[]
 }) {
-  const [coreRules, projectProfile, uapisSummary] = await Promise.all([
-    getCoreRules(),
+  const [coreRuleFiles, projectProfile, uapisSummary] = await Promise.all([
+    getCoreRuleFiles(),
     getProjectProfileSummary(),
     getP0UapisSummary(),
   ])

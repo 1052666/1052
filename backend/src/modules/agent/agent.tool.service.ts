@@ -14,6 +14,7 @@ import { intelTools } from './tools/intel.tools.js'
 import { memoryTools } from './tools/memory.tools.js'
 import { notesTools } from './tools/notes.tools.js'
 import { orchestrationTools } from './tools/orchestration.tools.js'
+import { outputProfileTools } from './tools/output-profile.tools.js'
 import { repositoryTools } from './tools/repository.tools.js'
 import { resourcesTools } from './tools/resources.tools.js'
 import { scheduleTools } from './tools/schedule.tools.js'
@@ -30,6 +31,7 @@ const AGENT_TOOLS: AgentTool[] = [
   ...calendarTools,
   ...imageTools,
   ...memoryTools,
+  ...outputProfileTools,
   ...repositoryTools,
   ...notesTools,
   ...resourcesTools,
