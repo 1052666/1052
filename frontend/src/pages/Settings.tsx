@@ -16,6 +16,7 @@ import {
 } from '../api/appearance'
 import { AgentApi, type AgentMigrationPreview, type AgentMigrationResult } from '../api/agent'
 import { UpdatesApi, type UpdateRun, type UpdateStatus } from '../api/updates'
+import ThemePreviewMatrix from '../components/appearance/ThemePreviewMatrix'
 import MemorySummaryPanel from '../components/MemorySummaryPanel'
 import TokenUsagePanel from '../components/TokenUsagePanel'
 import { useTheme } from '../theme-context'
@@ -1649,6 +1650,12 @@ export default function Settings() {
                         ))}
                       </div>
                     ) : null}
+                    {appearanceConfirmation.kind === 'apply' ? (
+                      <ThemePreviewMatrix
+                        theme={appearanceConfirmation.profile.theme}
+                        review={appearanceConfirmation.profile.review}
+                      />
+                    ) : null}
                     <label className="theme-confirm-check">
                       <input
                         type="checkbox"
@@ -1726,22 +1733,11 @@ export default function Settings() {
                               {profile.review.safetyLevel}
                             </span>
                           </div>
-                          <div
-                            className="theme-profile-preview"
-                            style={{
-                              background: `linear-gradient(135deg, ${profile.theme.tokens.bgGrad1}, ${profile.theme.tokens.bgGrad2})`,
-                              color: profile.theme.tokens.fg,
-                              borderColor: profile.theme.tokens.hairline2,
-                            }}
-                          >
-                            <div style={{ background: profile.theme.tokens.surface1 }}>
-                              <span style={{ background: profile.theme.tokens.accent }} />
-                              <p>{t('固定预览快照', 'Fixed preview snapshot')}</p>
-                            </div>
-                            <code style={{ color: profile.theme.tokens.fg2 }}>
-                              SELECT status, count(*) FROM runs;
-                            </code>
-                          </div>
+                          <ThemePreviewMatrix
+                            theme={profile.theme}
+                            review={profile.review}
+                            density="compact"
+                          />
                           {profile.review.blockingIssues.length > 0 ? (
                             <div className="theme-profile-issues">
                               {profile.review.blockingIssues.slice(0, 2).map((item) => (
