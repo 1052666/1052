@@ -188,6 +188,10 @@ export default function Settings() {
   const llmProvider = detectLlmProvider(baseUrl, modelId)
   const llmApiKeyPortal = LLM_API_KEY_PORTALS[llmProvider]
   const updateRunActive = isUpdateRunActive(updateRun)
+  const canInstallSystemUpdate = Boolean(
+    updateStatus?.canInstall &&
+      (updateStatus.updateAvailable || (updateStatus.mode === 'archive' && updateStatus.latest)),
+  )
 
   useEffect(() => {
     SettingsApi.get()
@@ -939,7 +943,11 @@ export default function Settings() {
                     <span>当前版本</span>
                     <strong>{updateStatus?.current.shortCommit || '未知'}</strong>
                     <small>
-                      {updateStatus?.mode === 'git' ? `Git ${updateStatus.current.branch || 'main'}` : '源码包'}
+                      {updateStatus?.mode === 'git'
+                        ? `Git ${updateStatus.current.branch || 'main'}`
+                        : updateStatus?.current.source === 'state'
+                          ? '源码包基线'
+                          : '源码包'}
                     </small>
                   </div>
                   <div className="update-status-card">
@@ -999,12 +1007,13 @@ export default function Settings() {
                     disabled={
                       updateBusy ||
                       updateRunActive ||
-                      !updateStatus?.canInstall ||
-                      !updateStatus?.updateAvailable
+                      !canInstallSystemUpdate
                     }
                     onClick={() => void installSystemUpdate()}
                   >
-                    安装更新
+                    {updateStatus && !updateStatus.updateAvailable && updateStatus.mode === 'archive'
+                      ? '重新安装最新版'
+                      : '安装更新'}
                   </button>
                   <button
                     className="chip"
