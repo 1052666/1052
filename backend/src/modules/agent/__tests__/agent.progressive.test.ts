@@ -17,8 +17,8 @@ import {
 } from '../agent.checkpoint.service.js'
 import { buildP0Messages } from '../agent.p0.service.js'
 import { hasAgentTool } from '../agent.tool.service.js'
-import { isReadonlyTerminalCommandAllowed } from '../../terminal/terminal.service.js'
 import { terminalTools } from '../tools/terminal.tools.js'
+import { isReadonlyTerminalCommandAllowed } from '../../terminal/terminal.service.js'
 
 describe('agent progressive disclosure helpers', () => {
   it('normalizes requested packs and deduplicates invalid values', () => {
@@ -166,15 +166,34 @@ describe('agent progressive disclosure helpers', () => {
       false,
     )
     expect(isReadonlyTerminalCommandAllowed('git switch main')).toBe(false)
+    expect(isReadonlyTerminalCommandAllowed('git restore backend/src/modules/terminal/terminal.service.ts')).toBe(false)
     expect(isReadonlyTerminalCommandAllowed('npm run build')).toBe(false)
+    expect(isReadonlyTerminalCommandAllowed('[IO.File]::WriteAllText("x.txt","no")')).toBe(false)
+    expect(isReadonlyTerminalCommandAllowed('python -c "open(\'x.txt\',\'w\').write(\'no\')"')).toBe(false)
   })
 
   it('wires terminal_run_readonly through the strict read-only boundary', async () => {
     const tool = terminalTools.find((item) => item.name === 'terminal_run_readonly')
     expect(tool).toBeTruthy()
 
+    const result = await tool?.execute({
+      command: 'ls',
+      confirmed: true,
+    })
+    expect(result).toMatchObject({
+      exitCode: 0,
+      risk: 'safe',
+    })
+
     await expect(tool?.execute({ command: 'echo ok' })).rejects.toThrow(
       'Read-only terminal tool only allows',
     )
+
+    await expect(
+      tool?.execute({
+        command: 'Set-Content -Path should-not-exist.txt -Value no',
+        confirmed: true,
+      }),
+    ).rejects.toThrow('Read-only terminal tool only allows explicit read commands')
   })
 })
