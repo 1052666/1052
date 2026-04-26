@@ -9314,3 +9314,418 @@ button.social-platform-card:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ==================== PKM Page ==================== */
+.pkm-page {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.pkm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.pkm-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.pkm-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pkm-summary-badge {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.pkm-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.pkm-tab {
+  padding: 6px 16px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  font-size: 0.9rem;
+}
+
+.pkm-tab.active {
+  color: var(--text);
+  background: var(--bg-elevated);
+  font-weight: 600;
+}
+
+.pkm-tab:hover {
+  color: var(--text);
+}
+
+/* Search */
+.pkm-search-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pkm-search-bar {
+  display: flex;
+  gap: 8px;
+}
+
+.pkm-search-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.pkm-search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.pkm-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pkm-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pkm-filter-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  min-width: 40px;
+}
+
+.pkm-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+}
+
+.pkm-chip.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.pkm-chip:hover {
+  border-color: var(--accent);
+}
+
+/* Results */
+.pkm-results {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pkm-results-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.pkm-fallback-hint {
+  color: var(--warning);
+  font-style: italic;
+}
+
+.pkm-result-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pkm-result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pkm-source-badge {
+  font-size: 0.7rem;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.pkm-score {
+  color: var(--warning);
+  font-size: 0.85rem;
+}
+
+.pkm-category-badge {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.pkm-result-title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.pkm-result-summary {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.pkm-result-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pkm-match-snippet {
+  font-size: 0.8rem;
+  color: var(--accent);
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.pkm-result-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.pkm-result-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.pkm-tag {
+  font-size: 0.75rem;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+
+.pkm-result-link {
+  font-size: 0.8rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.pkm-result-link:hover {
+  text-decoration: underline;
+}
+
+/* Thesaurus */
+.pkm-thesaurus-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pkm-thesaurus-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pkm-input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.pkm-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.pkm-thesaurus-filter {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pkm-thesaurus-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pkm-thesaurus-item {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pkm-thesaurus-term {
+  font-weight: 600;
+  min-width: 100px;
+}
+
+.pkm-thesaurus-synonyms {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.pkm-thesaurus-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pkm-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
+  font-size: 0.9rem;
+}
+
+.btn-sm {
+  padding: 2px 8px;
+  font-size: 0.75rem;
+}
+
+.btn-danger {
+  color: var(--error);
+  border-color: var(--error);
+  background: none;
+}
+
+.btn-danger:hover {
+  background: var(--error);
+  color: #fff;
+}
+
+/* SOP */
+.pkm-sop-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pkm-sop-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.pkm-sop-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.pkm-sop-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.pkm-sop-step-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.pkm-sop-card-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.pkm-sop-description {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0 0 8px 38px;
+}
+
+.pkm-sop-tips {
+  margin: 0 0 0 38px;
+  padding-left: 16px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.pkm-sop-tips li {
+  margin-bottom: 4px;
+}
+
+/* Wiki index fields */
+.wiki-index-fields {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0;
+}
+
+.wiki-index-fields summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  user-select: none;
+}
+
+.wiki-index-fields .wiki-form-grid {
+  padding: 10px 12px;
+}

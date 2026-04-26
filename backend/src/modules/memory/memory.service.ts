@@ -3,6 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { config } from '../../config.js'
 import { HttpError } from '../../http-error.js'
+import { schedulePkmReindex } from '../pkm/pkm.service.js'
 import type {
   MemoryCategory,
   MemoryInput,
@@ -607,6 +608,7 @@ export async function createMemory(input: MemoryInput) {
   await saveMemories(items)
   await rebuildProfiles()
   await appendEvent('memory.create', { id: item.id, title: item.title, category: item.category })
+  schedulePkmReindex()
   return item
 }
 
@@ -621,6 +623,7 @@ export async function updateMemory(idInput: unknown, input: MemoryInput) {
   await saveMemories(items)
   await rebuildProfiles()
   await appendEvent('memory.update', { id: next.id, title: next.title })
+  schedulePkmReindex()
   return next
 }
 
@@ -633,6 +636,7 @@ export async function deleteMemory(idInput: unknown) {
   await saveMemories(items.filter((memory) => memory.id !== id))
   await rebuildProfiles()
   await appendEvent('memory.delete', { id: item.id, title: item.title })
+  schedulePkmReindex()
   return { ok: true as const, deleted: item }
 }
 

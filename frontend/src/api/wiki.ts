@@ -1,6 +1,6 @@
 import { api } from './client'
 
-export type WikiCategory = 'entity' | 'concept' | 'synthesis'
+export type WikiCategory = 'entity' | 'concept' | 'synthesis' | 'experience'
 
 export type WikiRawFile = {
   path: string
@@ -26,6 +26,11 @@ export type WikiPage = {
   size: number
   updatedAt: number
   hasFrontmatter: boolean
+  keywords: string[]
+  subjectTerms: string[]
+  aliases: string[]
+  scene: string
+  titleStandard: string
 }
 
 export type WikiSummary = {

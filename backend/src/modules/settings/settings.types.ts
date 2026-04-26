@@ -13,6 +13,7 @@ export type LLMTaskKind =
   | 'coding'
   | 'summarization'
   | 'vision'
+  | 'pkm-index'
 
 export type LLMProfile = {
   id: string

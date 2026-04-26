@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import unzipper from 'unzipper'
+import { schedulePkmReindex } from '../pkm/pkm.service.js'
 import { config } from '../../config.js'
 import { HttpError } from '../../http-error.js'
 import type {
@@ -817,6 +818,7 @@ export async function createSkill(input: SkillInput) {
   const dir = skillDir(id)
   await fs.mkdir(dir, { recursive: true })
   await fs.writeFile(skillFilePath(id), buildSkillMarkdown(input), 'utf-8')
+  schedulePkmReindex()
   return readSkill(id)
 }
 
@@ -825,6 +827,7 @@ export async function deleteSkill(idInput: unknown) {
   const dir = skillDir(id)
   if (!(await fileExists(skillFilePath(id)))) throw new HttpError(404, 'Skill does not exist')
   await fs.rm(dir, { recursive: true, force: true })
+  schedulePkmReindex()
   return { ok: true, id }
 }
 
