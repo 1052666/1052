@@ -70,9 +70,15 @@ const PACK_TOOL_NAMES: Record<Exclude<AgentPackName, 'base-read-pack'>, readonly
     'agent_llm_set_task_route',
   ],
   'plan-pack': [
+    'calendar_create_event',
     'calendar_list_events',
+    'calendar_update_event',
+    'calendar_delete_event',
     'schedule_list_tasks',
     'schedule_list_runs',
+    'pkm_search',
+    'pkm_summary',
+    'pkm_reindex',
   ],
   'data-pack': [
     'notes_list_notes',
@@ -189,7 +195,7 @@ export function describePackForRouting(pack: Exclude<AgentPackName, 'base-read-p
     case 'settings-pack':
       return 'Agent 运行设置维护。用于在用户明确确认后切换 LLM Profile、设置任务级模型路由或更新早报偏好；读取状态和本地模型扫描已在 base-read-pack 中可用。'
     case 'plan-pack':
-      return '日程、定时任务、计划类工具。'
+      return '日程创建/查询/更新/删除、定时任务查看、PKM 知识检索。日程写入和 PKM 索引重建需用户确认。'
     case 'data-pack':
       return '笔记、资源列表、SQL 数据源管理（MySQL/Oracle/SQLite/Hive）、SQL 文件管理、SQL 查询执行、SQL 变量管理、SSH 服务器管理、Shell 脚本管理及执行、SQL 编排（DAG 工作流）、Wiki raw 原始资料、结构化知识页、综合分析、Wiki lint 健康检查和知识沉淀工具。SQL 写入、服务器操作、Shell 执行和 Wiki 写入默认需要用户确认。'
     case 'channel-pack':

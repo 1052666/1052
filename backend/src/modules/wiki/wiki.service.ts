@@ -16,6 +16,7 @@ import type {
   WikiSummary,
 } from './wiki.types.js'
 import { lintWiki } from './wiki.lint.js'
+import { schedulePkmReindex } from '../pkm/pkm.service.js'
 
 const WIKI_ROOT = path.join(config.dataDir, 'wiki')
 const RAW_ROOT = path.join(WIKI_ROOT, 'raw')
@@ -27,6 +28,7 @@ const CATEGORY_DIRS: Record<WikiCategory, string> = {
   entity: '实体',
   concept: '核心理念',
   synthesis: '综合分析',
+  experience: '经验',
 }
 const READABLE_EXTENSIONS = new Set(['.md', '.txt', '.csv', '.json', '.yaml', '.yml'])
 const PAGE_EXTENSIONS = new Set(['.md'])
@@ -107,6 +109,7 @@ export async function ensureWikiStructure() {
     fs.mkdir(path.join(PAGE_ROOT, CATEGORY_DIRS.entity), { recursive: true }),
     fs.mkdir(path.join(PAGE_ROOT, CATEGORY_DIRS.concept), { recursive: true }),
     fs.mkdir(path.join(PAGE_ROOT, CATEGORY_DIRS.synthesis), { recursive: true }),
+    fs.mkdir(path.join(PAGE_ROOT, CATEGORY_DIRS.experience), { recursive: true }),
   ])
 
   const index = resolveInside(PAGE_ROOT, INDEX_PATH)
@@ -199,6 +202,7 @@ export async function copyAgentWorkspaceFileToRaw(input: {
 function categoryFromPath(relativePath: string): WikiCategory {
   if (relativePath.startsWith(`${CATEGORY_DIRS.entity}/`)) return 'entity'
   if (relativePath.startsWith(`${CATEGORY_DIRS.synthesis}/`)) return 'synthesis'
+  if (relativePath.startsWith(`${CATEGORY_DIRS.experience}/`)) return 'experience'
   return 'concept'
 }
 
@@ -266,15 +270,32 @@ function normalizeFrontmatter(input: {
   sources?: unknown
   summary?: unknown
   raw?: string
+  keywords?: unknown
+  subjectTerms?: unknown
+  aliases?: unknown
+  scene?: unknown
+  titleStandard?: unknown
 }): WikiFrontmatter {
   const parsed = input.raw ? parseFrontmatter(input.raw).frontmatter : null
-  const category =
-    input.category === 'entity' || input.category === 'concept' || input.category === 'synthesis'
-      ? input.category
-      : parsed?.category ?? categoryFromPath(input.path)
+  const validCategories: WikiCategory[] = ['entity', 'concept', 'synthesis', 'experience']
+  const category = validCategories.includes(input.category as WikiCategory)
+    ? (input.category as WikiCategory)
+    : parsed?.category ?? categoryFromPath(input.path)
   const sources = Array.isArray(input.sources)
     ? input.sources.map(String).map((item) => item.trim()).filter(Boolean)
     : parsed?.sources ?? []
+
+  const normalizeArrayField = (value: unknown, parsedFallback: string[] = []): string[] => {
+    if (Array.isArray(value)) {
+      return [...new Set(value.map(String).map((item) => item.trim()).filter(Boolean))].slice(0, 20)
+    }
+    return parsedFallback
+  }
+  const normalizeStringField = (value: unknown, parsedFallback: string = ''): string => {
+    if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 200)
+    return parsedFallback
+  }
+
   return {
     tags: Array.isArray(input.tags)
       ? input.tags.map(String).map((item) => item.trim()).filter(Boolean)
@@ -287,6 +308,11 @@ function normalizeFrontmatter(input: {
       typeof input.summary === 'string' && input.summary.trim()
         ? input.summary.trim()
         : parsed?.summary ?? (typeof input.title === 'string' ? input.title.trim() : ''),
+    keywords: normalizeArrayField(input.keywords, parsed?.keywords ?? []),
+    subject_terms: normalizeArrayField(input.subjectTerms, parsed?.subject_terms ?? []),
+    aliases: normalizeArrayField(input.aliases, parsed?.aliases ?? []),
+    scene: normalizeStringField(input.scene, parsed?.scene ?? ''),
+    title_standard: normalizeStringField(input.titleStandard, parsed?.title_standard ?? ''),
   }
 }
 
@@ -301,20 +327,23 @@ export async function writeWikiPage(input: {
 }) {
   await ensureWikiStructure()
   const title = typeof input.title === 'string' ? input.title.trim() : ''
-  const category =
-    input.category === 'entity' || input.category === 'concept' || input.category === 'synthesis'
-      ? input.category
-      : undefined
+  const validCategories: WikiCategory[] = ['entity', 'concept', 'synthesis', 'experience']
+  const category = validCategories.includes(input.category as WikiCategory)
+    ? (input.category as WikiCategory)
+    : undefined
   const relativePath = normalizePagePath(input.path, category, title)
+  const experienceTemplate = `# ${title || path.basename(relativePath, '.md')}\n\n## 背景\n\n## 过程\n\n## 结果\n\n## 经验教训\n\n## 关联\n\n## 来源\n`
+  const defaultTemplate = `# ${title || path.basename(relativePath, '.md')}\n\n## 概述\n\n## 关键观点\n\n## 关联\n\n## 来源\n`
   const body =
     typeof input.content === 'string' && input.content.trim()
       ? input.content
-      : `# ${title || path.basename(relativePath, '.md')}\n\n## 概述\n\n## 关键观点\n\n## 关联\n\n## 来源\n`
+      : category === 'experience' ? experienceTemplate : defaultTemplate
   const frontmatter = normalizeFrontmatter({ ...input, path: relativePath })
   const raw = buildPageRaw(frontmatter, body)
   await writeFileAtomic(resolveInside(PAGE_ROOT, relativePath), raw)
   await rebuildWikiIndex()
   await appendWikiLog({ type: 'manual-update', summary: `写入 Wiki 页面 ${relativePath}`, targets: [relativePath] })
+  schedulePkmReindex()
   return readWikiPage(relativePath)
 }
 
@@ -340,6 +369,7 @@ export async function appendWikiPageSection(input: {
   await writeFileAtomic(resolveInside(PAGE_ROOT, page.path), buildPageRaw(frontmatter, body))
   await rebuildWikiIndex()
   await appendWikiLog({ type: 'manual-update', summary: `追加 Wiki 页面 ${page.path}`, targets: [page.path] })
+  schedulePkmReindex()
   return readWikiPage(page.path)
 }
 

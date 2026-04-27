@@ -3,6 +3,7 @@ import path from 'node:path'
 import { config } from '../../config.js'
 import { HttpError } from '../../http-error.js'
 import type { ResourceInput, ResourceItem, ResourceStatus } from './resources.types.js'
+import { schedulePkmReindex } from '../pkm/pkm.service.js'
 
 const RESOURCE_DIR = 'resources'
 const ITEMS_DIR = 'items'
@@ -228,6 +229,7 @@ export async function createResource(input: ResourceInput) {
   }
   await migrateLegacyResourcesIfNeeded()
   await writeResourceFile(item)
+  schedulePkmReindex()
   return item
 }
 
@@ -250,6 +252,7 @@ export async function updateResource(idInput: unknown, input: ResourceInput) {
     updatedAt: Date.now(),
   }
   await writeResourceFile(next)
+  schedulePkmReindex()
   return next
 }
 
@@ -260,5 +263,6 @@ export async function strikeResource(idInput: unknown, struck: boolean) {
 export async function deleteResource(idInput: unknown) {
   const item = await readResourceFile(idInput)
   await fs.rm(resourceItemPath(item.id), { force: true })
+  schedulePkmReindex()
   return { ok: true as const, deleted: item }
 }

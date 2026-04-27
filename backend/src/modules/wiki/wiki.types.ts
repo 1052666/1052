@@ -1,4 +1,4 @@
-export type WikiCategory = 'entity' | 'concept' | 'synthesis'
+export type WikiCategory = 'entity' | 'concept' | 'synthesis' | 'experience'
 
 export type WikiFrontmatter = {
   tags: string[]
@@ -7,6 +7,11 @@ export type WikiFrontmatter = {
   last_updated: string
   sources: string[]
   summary: string
+  keywords: string[]
+  subject_terms: string[]
+  aliases: string[]
+  scene: string
+  title_standard: string
 }
 
 export type WikiPage = {
@@ -25,6 +30,11 @@ export type WikiPage = {
   size: number
   updatedAt: number
   hasFrontmatter: boolean
+  keywords: string[]
+  subjectTerms: string[]
+  aliases: string[]
+  scene: string
+  titleStandard: string
 }
 
 export type WikiRawFile = {
@@ -50,6 +60,7 @@ export type WikiLintResult = {
   missingSources: Array<{ page: string; source: string }>
   sourceCountMismatches: Array<{ page: string; expected: number; actual: number }>
   indexMissingPages: string[]
+  missingIndexFields: string[]
   autoFixable: string[]
   warnings: string[]
 }

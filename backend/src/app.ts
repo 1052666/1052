@@ -20,6 +20,7 @@ import { wecomRouter } from './modules/channels/wecom/wecom.routes.js'
 import { uapisRouter } from './modules/uapis/uapis.routes.js'
 import { runtimeLogsRouter } from './modules/runtime-logs/runtime-logs.routes.js'
 import { wikiRouter } from './modules/wiki/wiki.routes.js'
+import { pkmRouter } from './modules/pkm/pkm.routes.js'
 import { outputProfileRouter } from './modules/output-profiles/output-profile.routes.js'
 import { updatesRouter } from './modules/updates/updates.routes.js'
 import { appearanceRouter } from './modules/appearance/appearance.routes.js'
@@ -29,6 +30,7 @@ import {
   feishuRouter,
 } from './modules/channels/feishu/feishu.routes.js'
 import { appendBackendRuntimeLog } from './runtime-logs.js'
+import { ensurePkmIndex } from './modules/pkm/pkm.service.js'
 
 export function createApp(): Express {
   const app = express()
@@ -63,6 +65,7 @@ export function createApp(): Express {
   app.use('/api/notes', notesRouter)
   app.use('/api/resources', resourcesRouter)
   app.use('/api/wiki', wikiRouter)
+  app.use('/api/pkm', pkmRouter)
   app.use('/api/output-profiles', outputProfileRouter)
   app.use('/api/appearance', appearanceRouter)
   app.use('/api/updates', updatesRouter)
@@ -99,6 +102,9 @@ export function createApp(): Express {
     }).catch(() => {})
     res.status(500).json({ error: message })
   })
+
+  // Auto-build PKM index on first startup
+  void ensurePkmIndex()
 
   return app
 }

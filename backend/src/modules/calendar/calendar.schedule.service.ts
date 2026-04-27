@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { HttpError } from '../../http-error.js'
 import { readJson, writeJson } from '../../storage.js'
+import { schedulePkmReindex } from '../pkm/pkm.service.js'
 import {
   getDefaultTerminalShell,
   normalizeTerminalShell,
@@ -829,6 +830,7 @@ export async function createScheduledTask(input: ScheduledTaskInput) {
   })
   const tasks = await readTasks()
   await saveTasks([...tasks, task])
+  schedulePkmReindex()
   return task
 }
 
@@ -845,6 +847,7 @@ export async function updateScheduledTask(id: string, patch: ScheduledTaskPatch)
   })
   tasks[index] = next
   await saveTasks(tasks)
+  schedulePkmReindex()
   return next
 }
 
@@ -856,6 +859,7 @@ export async function deleteScheduledTask(id: string) {
   const runs = await readRuns()
   await saveRuns(runs.filter((run) => run.taskId !== id))
   runningTaskIds.delete(id)
+  schedulePkmReindex()
   return { deleted: true, id }
 }
 

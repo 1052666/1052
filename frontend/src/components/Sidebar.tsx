@@ -29,6 +29,7 @@ const items = [
   { to: '/repository', label: '仓库', Icon: IconRepo },
   { to: '/notes', label: '笔记', Icon: IconNotes },
   { to: '/wiki', label: 'Wiki', Icon: IconWiki },
+  { to: '/pkm', label: 'PKM', Icon: IconSearchGrid },
   { to: '/output-profiles', label: '输出配方', Icon: IconSparkle },
   { to: '/resources', label: '资源列表', Icon: IconResources },
   { to: '/memory', label: '记忆中心', Icon: IconMemory },

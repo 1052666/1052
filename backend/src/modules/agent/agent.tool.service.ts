@@ -24,6 +24,7 @@ import { terminalTools } from './tools/terminal.tools.js'
 import { uapisTools } from './tools/uapis.tools.js'
 import { websearchTools } from './tools/websearch.tools.js'
 import { wikiTools } from './tools/wiki.tools.js'
+import { pkmTools } from './tools/pkm.tools.js'
 import { getSettings } from '../settings/settings.service.js'
 
 const AGENT_TOOLS: AgentTool[] = [
@@ -39,6 +40,7 @@ const AGENT_TOOLS: AgentTool[] = [
   ...scheduleTools,
   ...websearchTools,
   ...wikiTools,
+  ...pkmTools,
   ...uapisTools,
   ...filesystemTools,
   ...feishuTools,

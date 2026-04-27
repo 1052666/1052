@@ -74,6 +74,7 @@ export async function lintWiki(): Promise<WikiLintResult> {
     missingSources: [],
     sourceCountMismatches: [],
     indexMissingPages: [],
+    missingIndexFields: [],
     autoFixable: [],
     warnings: [],
   }
@@ -96,6 +97,11 @@ export async function lintWiki(): Promise<WikiLintResult> {
           expected: parsed.frontmatter.sources.length,
           actual: parsed.frontmatter.source_count,
         })
+      }
+      // Check for missing index fields
+      const fm = parsed.frontmatter
+      if (fm.keywords.length === 0 && fm.subject_terms.length === 0 && fm.aliases.length === 0 && !fm.scene) {
+        result.missingIndexFields.push(file)
       }
     }
 

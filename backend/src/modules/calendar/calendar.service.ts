@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { HttpError } from '../../http-error.js'
 import { readJson, writeJson } from '../../storage.js'
+import { schedulePkmReindex } from '../pkm/pkm.service.js'
 import type {
   CalendarEvent,
   CalendarEventInput,
@@ -145,6 +146,7 @@ export async function createCalendarEvent(input: CalendarEventInput) {
 
   const events = await readEvents()
   await saveEvents([...events, event])
+  schedulePkmReindex()
   return event
 }
 
@@ -166,6 +168,7 @@ export async function updateCalendarEvent(
 
   events[index] = next
   await saveEvents(events)
+  schedulePkmReindex()
   return next
 }
 
@@ -175,4 +178,5 @@ export async function deleteCalendarEvent(id: string) {
   if (next.length === events.length) throw new HttpError(404, '事件不存在')
 
   await saveEvents(next)
+  schedulePkmReindex()
 }

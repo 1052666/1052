@@ -23,6 +23,7 @@ const categoryLabels: Record<WikiCategory, string> = {
   entity: '实体',
   concept: '核心理念',
   synthesis: '综合分析',
+  experience: '经验',
 }
 
 const emptyDraft = {
@@ -33,6 +34,10 @@ const emptyDraft = {
   sources: '',
   summary: '',
   content: '# 新页面\n\n## 概述\n\n## 关键观点\n\n## 关联\n\n## 来源\n',
+  keywords: '',
+  subjectTerms: '',
+  aliases: '',
+  scene: '',
 }
 
 function formatTime(ts: number | null | undefined) {
@@ -78,6 +83,7 @@ export default function Wiki() {
   const [overwrite, setOverwrite] = useState(false)
   const [draft, setDraft] = useState(emptyDraft)
   const [showDraft, setShowDraft] = useState(false)
+  const [showIndexFields, setShowIndexFields] = useState(false)
   const [appendText, setAppendText] = useState('')
 
   const filteredRaw = useMemo(() => {
@@ -144,6 +150,10 @@ export default function Wiki() {
         sources: page.sources.join(', '),
         summary: page.summary,
         content: page.content,
+        keywords: (page.keywords ?? []).join(', '),
+        subjectTerms: (page.subjectTerms ?? []).join(', '),
+        aliases: (page.aliases ?? []).join(', '),
+        scene: page.scene ?? '',
       })
     } catch (error) {
       setNotice({ type: 'error', message: getErrorMessage(error, 'Wiki 页面读取失败') })
@@ -328,7 +338,7 @@ export default function Wiki() {
             </div>
           </section>
 
-          {(['entity', 'concept', 'synthesis'] as WikiCategory[]).map((category) => (
+          {(['entity', 'concept', 'synthesis', 'experience'] as WikiCategory[]).map((category) => (
             <section className="wiki-nav-section" key={category}>
               <h2>{categoryLabels[category]}</h2>
               <div className="wiki-file-list">
@@ -360,11 +370,25 @@ export default function Wiki() {
                   <option value="entity">实体</option>
                   <option value="concept">核心理念</option>
                   <option value="synthesis">综合分析</option>
+                  <option value="experience">经验</option>
                 </select>
                 <input className="settings-input" placeholder="标签，逗号分隔" value={draft.tags} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))} />
                 <input className="settings-input" placeholder="来源，逗号分隔" value={draft.sources} onChange={(event) => setDraft((current) => ({ ...current, sources: event.target.value }))} />
                 <input className="settings-input" placeholder="一句话摘要" value={draft.summary} onChange={(event) => setDraft((current) => ({ ...current, summary: event.target.value }))} />
               </div>
+              <details className="wiki-index-fields" open={showIndexFields}>
+                <summary onClick={(e) => { e.preventDefault(); setShowIndexFields(!showIndexFields) }}>
+                  标引信息（高级选项）
+                </summary>
+                {showIndexFields && (
+                  <div className="wiki-form-grid">
+                    <input className="settings-input" placeholder="关键词，逗号分隔" value={draft.keywords} onChange={(event) => setDraft((current) => ({ ...current, keywords: event.target.value }))} />
+                    <input className="settings-input" placeholder="主题词，逗号分隔" value={draft.subjectTerms} onChange={(event) => setDraft((current) => ({ ...current, subjectTerms: event.target.value }))} />
+                    <input className="settings-input" placeholder="别名，逗号分隔" value={draft.aliases} onChange={(event) => setDraft((current) => ({ ...current, aliases: event.target.value }))} />
+                    <input className="settings-input" placeholder="适用场景" value={draft.scene} onChange={(event) => setDraft((current) => ({ ...current, scene: event.target.value }))} />
+                  </div>
+                )}
+              </details>
               <textarea className="settings-input wiki-textarea" value={draft.content} onChange={(event) => setDraft((current) => ({ ...current, content: event.target.value }))} />
             </form>
           ) : (

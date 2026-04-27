@@ -1,6 +1,6 @@
 import type { WikiCategory, WikiFrontmatter, WikiPage } from './wiki.types.js'
 
-const VALID_CATEGORIES = new Set<WikiCategory>(['entity', 'concept', 'synthesis'])
+const VALID_CATEGORIES = new Set<WikiCategory>(['entity', 'concept', 'synthesis', 'experience'])
 
 function parseArray(value: string) {
   const trimmed = value.trim()
@@ -55,6 +55,12 @@ export function parseFrontmatter(raw: string): {
   const tags = parseArray(data.tags ?? '')
   const sourceCount = Number(data.source_count)
 
+  const keywords = parseArray(data.keywords ?? '')
+  const subject_terms = parseArray(data.subject_terms ?? '')
+  const aliases = parseArray(data.aliases ?? '')
+  const scene = (data.scene ?? '').replace(/^['"]|['"]$/g, '')
+  const title_standard = (data.title_standard ?? '').replace(/^['"]|['"]$/g, '')
+
   return {
     frontmatter: {
       tags,
@@ -63,13 +69,18 @@ export function parseFrontmatter(raw: string): {
       last_updated: data.last_updated || new Date().toISOString().slice(0, 10),
       sources,
       summary: (data.summary ?? '').replace(/^['"]|['"]$/g, ''),
+      keywords,
+      subject_terms,
+      aliases,
+      scene,
+      title_standard,
     },
     body,
   }
 }
 
 export function renderFrontmatter(frontmatter: WikiFrontmatter) {
-  return [
+  const lines = [
     '---',
     `tags: ${formatArray(frontmatter.tags)}`,
     `category: ${frontmatter.category}`,
@@ -77,9 +88,24 @@ export function renderFrontmatter(frontmatter: WikiFrontmatter) {
     `last_updated: ${frontmatter.last_updated}`,
     `sources: ${formatArray(frontmatter.sources)}`,
     `summary: ${frontmatter.summary.replace(/[\r\n]/g, ' ').trim()}`,
-    '---',
-    '',
-  ].join('\n')
+  ]
+  if (frontmatter.keywords.length > 0) {
+    lines.push(`keywords: ${formatArray(frontmatter.keywords)}`)
+  }
+  if (frontmatter.subject_terms.length > 0) {
+    lines.push(`subject_terms: ${formatArray(frontmatter.subject_terms)}`)
+  }
+  if (frontmatter.aliases.length > 0) {
+    lines.push(`aliases: ${formatArray(frontmatter.aliases)}`)
+  }
+  if (frontmatter.scene) {
+    lines.push(`scene: ${frontmatter.scene}`)
+  }
+  if (frontmatter.title_standard) {
+    lines.push(`title_standard: ${frontmatter.title_standard}`)
+  }
+  lines.push('---', '')
+  return lines.join('\n')
 }
 
 export function buildPageRaw(frontmatter: WikiFrontmatter, body: string) {
@@ -107,7 +133,9 @@ export function normalizePageFromRaw(input: {
     ? 'entity'
     : input.path.startsWith('综合分析/')
       ? 'synthesis'
-      : 'concept'
+      : input.path.startsWith('经验/')
+        ? 'experience'
+        : 'concept'
 
   return {
     path: input.path,
@@ -125,5 +153,10 @@ export function normalizePageFromRaw(input: {
     size: input.size,
     updatedAt: input.updatedAt,
     hasFrontmatter: parsed.frontmatter !== null,
+    keywords: parsed.frontmatter?.keywords ?? [],
+    subjectTerms: parsed.frontmatter?.subject_terms ?? [],
+    aliases: parsed.frontmatter?.aliases ?? [],
+    scene: parsed.frontmatter?.scene ?? '',
+    titleStandard: parsed.frontmatter?.title_standard ?? '',
   }
 }
