@@ -192,7 +192,7 @@ export function describePackForRouting(pack: Exclude<AgentPackName, 'base-read-p
     case 'memory-pack':
       return '长期记忆、敏感长期记忆和输出配方的读取、建议、写入、更新与删除。普通写入需用户明确要求记住或确认；敏感信息用 secure memory；输出配方用于组合认知模型、写作风格和素材范围。'
     case 'skill-pack':
-      return 'Skill 查询、读取、Marketplace 检索和 Intel Center 采集。新闻、早报、行情、全球情报、政经科技联动分析优先读取 intel-center Skill，并用 intel_center_collect 采集原始情报。'
+      return 'Skill 查询、读取、Marketplace 检索，以及 Intel Center 工具箱的采集入口。新闻、早报、行情、全球情报、政经科技联动分析优先读取 intel-center Skill，并用 intel_center_collect 采集原始情报。'
     case 'settings-pack':
       return 'Agent 运行设置维护。用于在用户明确确认后切换 LLM Profile、设置任务级模型路由或更新早报偏好；读取状态和本地模型扫描已在 base-read-pack 中可用。'
     case 'plan-pack':
@@ -200,6 +200,6 @@ export function describePackForRouting(pack: Exclude<AgentPackName, 'base-read-p
     case 'data-pack':
       return '笔记、资源列表、SQL 数据源管理（MySQL/Oracle/SQLite/Hive）、SQL 文件管理、SQL 查询执行、SQL 变量管理、SSH 服务器管理、Shell 脚本管理及执行、SQL 编排（DAG 工作流）、Wiki raw 原始资料、结构化知识页、综合分析、Wiki lint 健康检查和知识沉淀工具。SQL 写入、服务器操作、Shell 执行和 Wiki 写入默认需要用户确认。'
     case 'channel-pack':
-      return '微信、飞书等外部通道能力、Intel Brief 通道格式渲染和飞书工作区工具。'
+      return '微信、飞书等外部通道能力、Intel Center 工具箱的 Intel Brief 通道格式渲染和飞书工作区工具。'
   }
 }
