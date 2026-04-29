@@ -16,6 +16,17 @@ const DEFAULT_LOOP: LoopConfig = {
   subTask: { mode: 'inline', type: 'sql' },
 }
 
+const SUB_TASK_OPTIONS = [
+  { key: 'inline-sql',   label: 'SQL',       mode: 'inline' as const, type: 'sql' as const },
+  { key: 'inline-debug', label: 'Debug',      mode: 'inline' as const, type: 'debug' as const },
+  { key: 'inline-load',  label: '加载',       mode: 'inline' as const, type: 'load' as const },
+  { key: 'inline-wait',  label: 'Wait',       mode: 'inline' as const, type: 'wait' as const },
+  { key: 'inline-shell', label: 'Shell',      mode: 'inline' as const, type: 'shell' as const },
+  { key: 'ref-orch',     label: '编排',       mode: 'reference' as const, refType: 'orchestration' as const },
+  { key: 'ref-sql',      label: 'SQL 文件',   mode: 'reference' as const, refType: 'sqlFile' as const },
+  { key: 'ref-shell',    label: 'Shell 脚本', mode: 'reference' as const, refType: 'shellFile' as const },
+]
+
 export function LoopNodeConfig({
   node, datasources, sqlFiles, servers, shellFiles, variables, onChange,
 }: {
@@ -46,6 +57,11 @@ export function LoopNodeConfig({
   const inlineConfigProps = { node, datasources, sqlFiles, onChange }
   const subTask = loop?.subTask ?? DEFAULT_LOOP.subTask
 
+  const getSelectedKey = () => {
+    if (subTask.mode === 'inline') return `inline-${subTask.type}`
+    return `ref-${(subTask as LoopSubTaskReference).refType}`
+  }
+
   return (
     <>
       <FormField label="节点名称">
@@ -75,32 +91,20 @@ export function LoopNodeConfig({
         </div>
       </FormField>
 
-      <FormField label="子任务模式">
-        <div style={{ display: 'flex', gap: 4 }}>
-          {(['inline', 'reference'] as const).map(m => (
-            <button key={m} className={`chip small ${subTask.mode === m ? '' : 'inactive'}`}
-              onClick={() => {
-                if (m === 'inline') updateSubTask({ mode: 'inline', type: 'sql' })
-                else updateSubTask({ mode: 'reference', refType: 'orchestration', refId: '', variableName: '' })
-              }
-              }>
-              {m === 'inline' ? '内嵌' : '引用'}
-            </button>
-          ))}
-        </div>
+      <FormField label="子任务类型">
+        <select className="orch-drawer-select" value={getSelectedKey()}
+          onChange={(e) => {
+            const opt = SUB_TASK_OPTIONS.find(o => o.key === e.target.value)
+            if (!opt) return
+            if (opt.mode === 'inline') updateSubTask({ mode: 'inline', type: opt.type })
+            else updateSubTask({ mode: 'reference', refType: opt.refType, refId: '', variableName: '' })
+          }}>
+          {SUB_TASK_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+        </select>
       </FormField>
 
       {subTask.mode === 'inline' ? (
         <>
-          <FormField label="子任务类型">
-            <select className="orch-drawer-select" value={subTask.type} onChange={(e) => updateSubTask({ type: e.target.value as LoopSubTaskInline['type'] })}>
-              <option value="sql">SQL</option>
-              <option value="debug">Debug</option>
-              <option value="load">加载</option>
-              <option value="wait">Wait</option>
-              <option value="shell">Shell</option>
-            </select>
-          </FormField>
           <div style={{ borderTop: '1px solid var(--hairline)', margin: '6px 0' }} />
           {subTask.type === 'sql' && <SqlNodeConfig {...inlineConfigProps} />}
           {subTask.type === 'debug' && <DebugNodeConfig {...inlineConfigProps} />}
@@ -110,15 +114,6 @@ export function LoopNodeConfig({
         </>
       ) : (
         <>
-          <FormField label="引用类型">
-            <select className="orch-drawer-select" value={(subTask as LoopSubTaskReference).refType}
-              onChange={(e) => updateSubTask({ refType: e.target.value as LoopSubTaskReference['refType'], refId: '' })}>
-              <option value="orchestration">编排</option>
-              <option value="sqlFile">SQL 文件</option>
-              <option value="shellFile">Shell 脚本</option>
-            </select>
-          </FormField>
-
           {(subTask as LoopSubTaskReference).refType === 'orchestration' && (
             <>
               <FormField label="选择编排">
