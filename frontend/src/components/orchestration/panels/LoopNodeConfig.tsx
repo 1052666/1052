@@ -102,9 +102,9 @@ export function LoopNodeConfig({
             </select>
           </FormField>
           <div style={{ borderTop: '1px solid var(--hairline)', margin: '6px 0' }} />
-          {subTask.type === 'sql' && <SqlNodeConfig {...inlineConfigProps} variables={variables} />}
+          {subTask.type === 'sql' && <SqlNodeConfig {...inlineConfigProps} />}
           {subTask.type === 'debug' && <DebugNodeConfig {...inlineConfigProps} />}
-          {subTask.type === 'load' && <LoadNodeConfig node={node} datasources={datasources} variables={variables} onChange={onChange} />}
+          {subTask.type === 'load' && <LoadNodeConfig node={node} datasources={datasources} onChange={onChange} />}
           {subTask.type === 'wait' && <WaitNodeConfig {...inlineConfigProps} />}
           {subTask.type === 'shell' && <ShellNodeConfig node={node} servers={servers} shellFiles={shellFiles} onChange={onChange} />}
         </>

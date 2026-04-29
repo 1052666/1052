@@ -45,11 +45,11 @@ export function NodeConfigDrawer({
     const props = { node, datasources, sqlFiles, onChange }
     switch (node.type) {
       case 'debug': return <DebugNodeConfig {...props} />
-      case 'load':  return <LoadNodeConfig {...props} datasources={datasources} variables={variables} />
+      case 'load':  return <LoadNodeConfig {...props} datasources={datasources} />
       case 'wait':  return <WaitNodeConfig {...props} />
       case 'shell': return <ShellNodeConfig node={node} servers={servers} shellFiles={shellFiles} onChange={onChange} />
       case 'loop':  return <LoopNodeConfig node={node} datasources={datasources} sqlFiles={sqlFiles} servers={servers} shellFiles={shellFiles} variables={variables} onChange={onChange} />
-      default:      return <SqlNodeConfig {...props} variables={variables} />
+      default:      return <SqlNodeConfig {...props} />
     }
   }
 
