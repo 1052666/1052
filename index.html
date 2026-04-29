@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>1052 OS | 真正能帮你做事的个人 AI 工作台</title>
+<meta
+  name="description"
+  content="1052 OS 是一个本地优先、工具驱动、可接入社交通道的个人 AI 工作台。聊天、文件、知识、记忆、任务、搜索、微信桌面通道与 Agent 执行链路都被放在同一个系统里。"
+/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F5F2EC;
+    --paper-2:#EEEAE0;
+    --ink:#111111;
+    --ink-soft:#5B5A57;
+    --ink-mute:#8A867D;
+    --rule:#E3DED3;
+    --rule-2:#D8D2C4;
+    --accent: oklch(0.38 0.12 265);
+    --accent-soft: oklch(0.93 0.03 265);
+    --amber: oklch(0.72 0.12 70);
+    --green: oklch(0.62 0.10 150);
+    --red: oklch(0.62 0.14 27);
+    --sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+    --serif-zh: "Noto Serif SC", "Source Han Serif SC", serif;
+    --maxw: 1240px;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:15px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  a{color:inherit;text-decoration:none}
+  .mono{font-family:var(--mono); font-feature-settings:"ss01","cv11"; letter-spacing:0.01em}
+  .muted{color:var(--ink-soft)}
+  .tiny{font-size:12px}
+  .small{font-size:13px}
+  .upcase{text-transform:uppercase; letter-spacing:0.14em}
+  .accent{color:var(--accent)}
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 32px}
+
+  .statusbar{
+    border-bottom:1px solid var(--rule);
+    background:var(--paper);
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--ink-soft);
+    letter-spacing:0.04em;
+  }
+  .statusbar .wrap{display:flex; align-items:center; justify-content:space-between; height:28px}
+  .statusbar .dots{display:inline-flex; gap:6px; align-items:center}
+  .statusbar .dot{width:7px;height:7px;border-radius:999px;background:var(--ink-mute)}
+  .statusbar .dot.live{background:var(--green); box-shadow:0 0 0 3px color-mix(in oklab, var(--green) 20%, transparent)}
+  .statusbar .sep{color:var(--ink-mute); margin:0 10px}
+
+  nav.top{
+    border-bottom:1px solid var(--rule);
+    background: color-mix(in oklab, var(--paper) 92%, white);
+    position:sticky; top:0; z-index:20;
+    backdrop-filter: blur(8px);
+  }
+  nav.top .wrap{display:flex; align-items:center; gap:32px; height:64px}
+  .brand{display:flex; align-items:center; gap:12px; font-weight:600; letter-spacing:-0.01em}
+  .brand .mark{
+    width:28px;height:28px;border-radius:7px;
+    background:var(--ink);
+    color:var(--paper);
+    display:grid; place-items:center;
+    font-family:var(--mono); font-size:11px; font-weight:500;
+  }
+  .brand .name{font-size:16px}
+  .brand .by{font-family:var(--mono); font-size:11px; color:var(--ink-soft); margin-left:2px}
+  nav.top ul{list-style:none; display:flex; gap:26px; margin:0; padding:0; font-size:14px; color:var(--ink-soft)}
+  nav.top ul a:hover{color:var(--ink)}
+  nav.top .spacer{flex:1}
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    height:36px; padding:0 14px; border-radius:8px;
+    border:1px solid var(--ink); background:var(--ink); color:var(--paper);
+    font-size:13px; font-weight:500;
+    transition:transform .15s ease, background .15s ease, border-color .15s ease;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn.ghost{background:transparent; color:var(--ink); border-color:var(--rule-2)}
+  .btn.ghost:hover{border-color:var(--ink)}
+  .btn .arrow{font-family:var(--mono); font-size:12px; opacity:.8}
+
+  section{padding:96px 0; border-bottom:1px solid var(--rule)}
+  .sec-tag{
+    display:flex; align-items:center; gap:12px;
+    font-family:var(--mono); font-size:11px; color:var(--ink-soft);
+    letter-spacing:0.12em; text-transform:uppercase;
+    margin-bottom:28px;
+  }
+  .sec-tag .bar{flex:0 0 28px; height:1px; background:var(--ink)}
+  h1,h2,h3,h4{margin:0; font-weight:600; letter-spacing:-0.02em}
+  h2{font-size:44px; line-height:1.1}
+  h2 .en{
+    display:block; font-family:var(--mono); font-size:12px; color:var(--ink-soft);
+    letter-spacing:0.1em; text-transform:uppercase; font-weight:500;
+    margin-top:14px;
+  }
+
+  .hero{padding:72px 0 110px}
+  .hero .kicker{
+    display:inline-flex; align-items:center; gap:10px;
+    font-family:var(--mono); font-size:11px; color:var(--ink-soft);
+    letter-spacing:0.14em; text-transform:uppercase;
+    border:1px solid var(--rule-2); border-radius:999px;
+    padding:6px 12px; background:color-mix(in oklab, var(--paper) 80%, white);
+  }
+  .hero .kicker .pulse{width:6px; height:6px; border-radius:999px; background:var(--green); box-shadow:0 0 0 3px color-mix(in oklab, var(--green) 20%, transparent)}
+  .hero h1{
+    font-family:var(--serif-zh);
+    font-weight:600;
+    font-size:88px;
+    line-height:1.02;
+    letter-spacing:-0.03em;
+    margin:28px 0 0;
+    max-width:14ch;
+  }
+  .hero h1 .light{color:var(--ink-soft); font-weight:400}
+  .hero .sub-en{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--ink-soft);
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    margin-top:28px;
+    max-width:760px;
+  }
+  .hero .lede{
+    font-size:19px;
+    line-height:1.55;
+    color:var(--ink);
+    max-width:700px;
+    margin:28px 0 0;
+  }
+  .hero .lede .soft{color:var(--ink-soft)}
+  .hero .ctas{display:flex; gap:12px; align-items:center; margin-top:36px; flex-wrap:wrap}
+  .hero .meta{
+    display:flex; gap:28px; margin-top:56px; flex-wrap:wrap;
+    font-family:var(--mono); font-size:11px; color:var(--ink-soft);
+    letter-spacing:0.1em; text-transform:uppercase;
+  }
+  .hero .meta b{color:var(--ink); font-weight:500}
+
+  .window{
+    margin-top:80px;
+    background:#FBF9F3;
+    border:1px solid var(--rule-2);
+    border-radius:12px;
+    overflow:hidden;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.6) inset,
+      0 30px 60px -30px rgba(20,18,10,0.18),
+      0 8px 20px -12px rgba(20,18,10,0.08);
+  }
+  .window .chrome{
+    height:36px;
+    display:flex; align-items:center; gap:8px;
+    padding:0 14px;
+    border-bottom:1px solid var(--rule);
+    background: linear-gradient(to bottom, #EEEAE0, #E6E1D4);
+  }
+  .window .chrome .light{width:11px;height:11px;border-radius:999px;background:#CFC9BC; border:1px solid rgba(0,0,0,0.06)}
+  .window .chrome .title{
+    flex:1; text-align:center;
+    font-family:var(--mono); font-size:11px; color:var(--ink-soft);
+    letter-spacing:0.1em;
+  }
+  .window .chrome .title b{color:var(--ink); font-weight:500}
+  .window .body{display:grid; grid-template-columns: 210px 1fr 280px; min-height:540px}
+  .sidebar{
+    border-right:1px solid var(--rule);
+    padding:18px 14px;
+    font-size:13px;
+  }
+  .sidebar h5{
+    margin:18px 8px 8px;
+    font-family:var(--mono); font-size:10px;
+    color:var(--ink-mute); letter-spacing:0.12em; text-transform:uppercase;
+    font-weight:500;
+  }
+  .sidebar h5:first-child{margin-top:4px}
+  .sidebar .item{
+    display:flex; align-items:center; gap:10px;
+    padding:7px 10px; border-radius:7px;
+    color:var(--ink-soft);
+  }
+  .sidebar .item.on{background:var(--paper-2); color:var(--ink); font-weight:500}
+  .sidebar .item .g{width:6px;height:6px;border-radius:2px;background:var(--ink-mute)}
+  .sidebar .item.on .g{background:var(--accent)}
+  .sidebar .item .k{flex:1}
+  .sidebar .item .n{font-family:var(--mono); font-size:11px; color:var(--ink-mute)}
+
+  .chat{padding:22px 26px; display:flex; flex-direction:column; gap:14px; border-right:1px solid var(--rule)}
+  .msg{max-width:92%}
+  .msg .who{font-family:var(--mono); font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-mute); margin-bottom:6px}
+  .msg .bubble{
+    background:var(--paper); border:1px solid var(--rule);
+    border-radius:10px; padding:12px 14px; font-size:14px; line-height:1.55;
+  }
+  .msg.me{align-self:flex-end}
+  .msg.me .bubble{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+  .msg.me .who{text-align:right}
+  .think{
+    border:1px dashed var(--rule-2); border-radius:8px; padding:8px 10px;
+    font-family:var(--mono); font-size:11px; color:var(--ink-soft);
+    display:flex; align-items:center; gap:10px; margin-bottom:8px;
+  }
+  .think .tri{width:0;height:0;border-left:5px solid var(--ink-soft); border-top:3.5px solid transparent; border-bottom:3.5px solid transparent}
+  .toolcall{
+    background:color-mix(in oklab, var(--accent) 8%, var(--paper));
+    border:1px solid color-mix(in oklab, var(--accent) 22%, var(--rule));
+    border-radius:10px; padding:10px 12px;
+    font-family:var(--mono); font-size:12px; color:var(--accent);
+  }
+  .toolcall .head{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-weight:500}
+  .toolcall .k{color:var(--ink-soft)}
+
+  .inspector{padding:20px 22px; background:color-mix(in oklab, var(--paper) 60%, white)}
+  .inspector h5{
+    margin:0 0 10px; font-family:var(--mono); font-size:10px; color:var(--ink-mute);
+    letter-spacing:0.12em; text-transform:uppercase; font-weight:500;
+  }
+  .inspector .card{
+    border:1px solid var(--rule); border-radius:10px; padding:12px; background:var(--paper);
+    margin-bottom:12px;
+  }
+  .inspector .row{display:flex; justify-content:space-between; font-size:12px; padding:3px 0; color:var(--ink-soft)}
+  .inspector .row b{color:var(--ink); font-weight:500; font-family:var(--mono); font-size:12px}
+  .inspector .pill{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:var(--mono); font-size:10px; letter-spacing:0.08em;
+    border:1px solid var(--rule); border-radius:999px; padding:3px 8px;
+    color:var(--ink-soft); margin-right:6px; margin-bottom:6px;
+  }
+  .inspector .pill .d{width:5px;height:5px;border-radius:999px;background:var(--ink-mute)}
+  .inspector .pill.on .d{background:var(--green)}
+  .inspector .pill.warn .d{background:var(--amber)}
+
+  .feat-grid{
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap:1px;
+    background:var(--rule);
+    border-top:1px solid var(--rule);
+    border-bottom:1px solid var(--rule);
+    margin-top:48px;
+  }
+  .feat{
+    grid-column: span 4;
+    background:var(--paper);
+    padding:28px 26px 32px;
+    min-height:220px;
+    position:relative;
+  }
+  .feat .num{
+    font-family:var(--mono); font-size:11px; color:var(--ink-mute);
+    letter-spacing:0.1em;
+  }
+  .feat .zh{
+    font-family:var(--serif-zh); font-size:24px; font-weight:600;
+    margin-top:18px; letter-spacing:-0.01em;
+  }
+  .feat .en{
+    font-family:var(--mono); font-size:11px; color:var(--ink-soft);
+    text-transform:uppercase; letter-spacing:0.12em; margin-top:6px;
+  }
+  .feat p{font-size:14px; color:var(--ink-soft); margin:14px 0 0; line-height:1.6}
+  .feat .glyph{
+    position:absolute; top:24px; right:26px;
+    width:34px; height:34px; border:1px solid var(--rule-2); border-radius:8px;
+    display:grid; place-items:center;
+    font-family:var(--mono); font-size:12px; color:var(--ink-soft);
+  }
+
+  .modtable{
+    margin-top:40px;
+    border:1px solid var(--rule);
+    border-radius:12px;
+    overflow:hidden;
+    background:color-mix(in oklab, var(--paper) 55%, white);
+  }
+  .modtable .row{
+    display:grid;
+    grid-template-columns: 220px 1fr;
+    border-bottom:1px solid var(--rule);
+  }
+  .modtable .row:last-child{border-bottom:0}
+  .modtable .row .k{
+    padding:20px 24px;
+    border-right:1px solid var(--rule);
+    background:var(--paper);
+  }
+  .modtable .row .k .zh{font-family:var(--serif-zh); font-size:19px; font-weight:600}
+  .modtable .row .k .en{font-family:var(--mono); font-size:10px; color:var(--ink-mute); letter-spacing:0.12em; text-transform:uppercase; margin-top:4px}
+  .modtable .row .v{padding:20px 24px; display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  .tag{
+    display:inline-flex; align-items:center; gap:7px;
+    font-size:12.5px; color:var(--ink);
+    background:var(--paper); border:1px solid var(--rule);
+    padding:6px 10px; border-radius:999px;
+  }
+  .tag .d{width:5px;height:5px;border-radius:999px;background:var(--ink-mute)}
+  .tag.a .d{background:var(--accent)}
+  .tag.g .d{background:var(--green)}
+  .tag.m .d{background:var(--amber)}
+
+  .flow{
+    margin-top:56px;
+    display:grid; grid-template-columns: repeat(4, 1fr); gap:0;
+    border:1px solid var(--rule); border-radius:12px; overflow:hidden;
+    background:var(--paper);
+  }
+  .flow .step{padding:28px 24px 32px; border-right:1px solid var(--rule); position:relative}
+  .flow .step:last-child{border-right:0}
+  .flow .step .no{font-family:var(--mono); font-size:11px; color:var(--ink-mute); letter-spacing:0.1em}
+  .flow .step h4{margin-top:14px; font-family:var(--serif-zh); font-size:22px}
+  .flow .step .en{font-family:var(--mono); font-size:10px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.12em; margin-top:4px}
+  .flow .step p{margin:14px 0 0; color:var(--ink-soft); font-size:13.5px; line-height:1.6}
+  .flow .step .arr{
+    position:absolute; right:-8px; top:36px; width:16px; height:16px;
+    background:var(--paper); border-top:1px solid var(--rule); border-right:1px solid var(--rule);
+    transform:rotate(45deg); z-index:2;
+  }
+  .flow .step:last-child .arr{display:none}
+
+  .split{display:grid; grid-template-columns: 1.1fr 1fr; gap:40px; margin-top:56px}
+  .panel{
+    background:color-mix(in oklab, var(--paper) 55%, white);
+    border:1px solid var(--rule);
+    border-radius:12px;
+    padding:26px 26px 28px;
+  }
+  .panel h3{font-family:var(--serif-zh); font-size:24px; margin-bottom:4px}
+  .panel h3 .en{display:block; font-family:var(--mono); font-size:10px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.12em; margin-top:4px; font-weight:500}
+  .panel .list{margin-top:20px}
+  .tkrow{
+    display:grid; grid-template-columns: 90px 1fr auto; gap:14px;
+    padding:12px 0; border-top:1px dashed var(--rule);
+    align-items:center;
+  }
+  .tkrow:first-of-type{border-top:0}
+  .tkrow .t{font-family:var(--mono); font-size:12px; color:var(--ink-soft)}
+  .tkrow .title{font-size:14px}
+  .tkrow .title .sub{display:block; color:var(--ink-soft); font-size:12px; margin-top:2px}
+  .tkrow .state{font-family:var(--mono); font-size:10px; letter-spacing:0.1em; color:var(--ink-soft); text-transform:uppercase}
+  .tkrow .state.ok{color:var(--green)}
+  .tkrow .state.run{color:var(--accent)}
+  .tkrow .state.pend{color:var(--amber)}
+  .notif{
+    display:flex; gap:14px; padding:14px 0; border-top:1px dashed var(--rule);
+    align-items:flex-start;
+  }
+  .notif:first-of-type{border-top:0}
+  .notif .ic{
+    width:32px; height:32px; border-radius:8px; border:1px solid var(--rule);
+    display:grid; place-items:center; font-family:var(--mono); font-size:12px; color:var(--ink-soft); flex:0 0 auto;
+  }
+  .notif .t{flex:1}
+  .notif .t .ttl{font-size:14px; font-weight:500}
+  .notif .t .sub{font-size:12.5px; color:var(--ink-soft); margin-top:2px; line-height:1.5}
+  .notif .t .meta{margin-top:6px; font-family:var(--mono); font-size:10.5px; color:var(--ink-mute); letter-spacing:0.08em; text-transform:uppercase}
+
+  .quote{
+    margin:0;
+    font-family:var(--serif-zh);
+    font-size:44px;
+    line-height:1.25;
+    letter-spacing:-0.02em;
+    max-width:22ch;
+  }
+  .quote .en{
+    display:block; font-family:var(--mono); font-size:12px;
+    color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.1em;
+    margin-top:24px; font-weight:500;
+  }
+
+  .faq{margin-top:32px; border-top:1px solid var(--rule)}
+  .faq details{border-bottom:1px solid var(--rule); padding:22px 4px}
+  .faq summary{
+    list-style:none; cursor:pointer;
+    display:flex; align-items:baseline; gap:18px;
+    font-family:var(--serif-zh); font-size:22px; font-weight:600;
+  }
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary .n{font-family:var(--mono); font-size:12px; color:var(--ink-mute); font-weight:500}
+  .faq summary .plus{margin-left:auto; font-family:var(--mono); color:var(--ink-soft); font-weight:400}
+  .faq details[open] summary .plus{transform:rotate(45deg)}
+  .faq summary .plus{transition:transform .2s}
+  .faq .body{padding:14px 0 0 56px; color:var(--ink-soft); font-size:15px; line-height:1.7; max-width:68ch}
+  .faq .body .en{display:block; font-family:var(--mono); font-size:11px; color:var(--ink-mute); text-transform:uppercase; letter-spacing:0.1em; margin-top:10px}
+
+  .cta{
+    margin-top:20px;
+    background:var(--ink); color:var(--paper);
+    border-radius:14px; padding:72px 56px;
+    display:grid; grid-template-columns: 1.3fr 1fr; gap:40px; align-items:end;
+    position:relative; overflow:hidden;
+  }
+  .cta .grid-bg{
+    position:absolute; inset:0; pointer-events:none; opacity:0.12;
+    background-image:
+      linear-gradient(to right, #ffffff22 1px, transparent 1px),
+      linear-gradient(to bottom, #ffffff22 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at 30% 20%, black 30%, transparent 75%);
+  }
+  .cta h2{font-family:var(--serif-zh); font-size:56px; line-height:1.05; letter-spacing:-0.02em}
+  .cta h2 .soft{color:#ffffff88}
+  .cta .en{font-family:var(--mono); font-size:12px; color:#ffffff99; letter-spacing:0.1em; text-transform:uppercase; margin-top:18px}
+  .cta .btn.primary{background:var(--paper); color:var(--ink); border-color:var(--paper)}
+  .cta .btn.ghost{color:var(--paper); border-color:#ffffff33}
+  .cta .btn.ghost:hover{border-color:var(--paper)}
+  .cta ul{list-style:none; margin:0; padding:0; font-family:var(--mono); font-size:12px; color:#ffffffaa; letter-spacing:0.06em}
+  .cta ul li{padding:10px 0; border-top:1px solid #ffffff1a; display:flex; justify-content:space-between}
+  .cta ul li:first-child{border-top:0}
+  .cta ul li b{color:var(--paper); font-weight:500}
+  .cta .ctas{display:flex; gap:12px; margin-top:36px; flex-wrap:wrap}
+
+  footer{padding:56px 0 80px}
+  footer .wrap{display:flex; gap:40px; flex-wrap:wrap; justify-content:space-between; align-items:flex-start}
+  footer .cols{display:flex; gap:60px; flex-wrap:wrap}
+  footer h6{font-family:var(--mono); font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-mute); margin:0 0 12px; font-weight:500}
+  footer ul{list-style:none; margin:0; padding:0; font-size:13.5px; color:var(--ink-soft)}
+  footer ul li{margin:8px 0}
+  footer .sig{max-width:360px; color:var(--ink-soft); font-size:13px; line-height:1.6}
+
+  @media (max-width: 1040px){
+    .window .body{grid-template-columns: 180px 1fr}
+    .inspector{display:none}
+    .feat{grid-column: span 6}
+    .flow{grid-template-columns: repeat(2,1fr)}
+    .flow .step:nth-child(2) .arr{display:none}
+    .split{grid-template-columns: 1fr}
+    .cta{grid-template-columns:1fr; padding:48px 32px}
+  }
+  @media (max-width: 720px){
+    .wrap{padding:0 20px}
+    nav.top ul{display:none}
+    .hero h1{font-size:56px}
+    h2{font-size:32px}
+    .window .body{grid-template-columns: 1fr}
+    .sidebar{display:none}
+    .chat{border-right:0}
+    .feat{grid-column: span 12}
+    .flow{grid-template-columns: 1fr}
+    .flow .step{border-right:0; border-bottom:1px solid var(--rule)}
+    .flow .step:last-child{border-bottom:0}
+    .flow .step .arr{display:none}
+    .quote{font-size:32px}
+    .cta h2{font-size:40px}
+    .faq .body{padding-left:0}
+  }
+</style>
+</head>
+<body id="top">
+
+<div class="statusbar">
+  <div class="wrap">
+    <div>
+      <span class="dots">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot live"></span>
+      </span>
+      <span class="sep">/</span>
+      <span>LOCAL-FIRST</span>
+      <span class="sep">/</span>
+      <span>AGENT WORKSPACE</span>
+    </div>
+    <div>1052 OS / 2026.04 / DESKTOP + SOCIAL + MEMORY</div>
+  </div>
+</div>
+
+<nav class="top">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <span class="mark">10</span>
+      <span class="name">1052 OS</span>
+      <span class="by">BY 1052</span>
+    </a>
+    <ul>
+      <li><a href="#features">能力</a></li>
+      <li><a href="#modules">模块</a></li>
+      <li><a href="#flow">工作流</a></li>
+      <li><a href="#schedule">任务</a></li>
+      <li><a href="#faq">FAQ</a></li>
+    </ul>
+    <div class="spacer"></div>
+    <a class="btn ghost" href="https://api.lxj.asia/register?aff=UOBG" target="_blank" rel="noopener">获取 API Key <span class="arrow">-></span></a>
+    <a class="btn" href="https://github.com/1052666/1052-OS" target="_blank" rel="noopener">GitHub <span class="arrow">-></span></a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="wrap">
+    <div class="kicker"><span class="pulse"></span><span>NOW SHIPPING / DESKTOP WECHAT CHANNEL / TOOL PROGRESS</span></div>
+    <h1>让 AI <span class="light">不止会说话，</span><br/>而是真的替你做事。</h1>
+    <div class="sub-en">A local-first personal AI workspace for files, tasks, memory, knowledge, search, scheduled jobs, and real social channels.</div>
+    <p class="lede">
+      1052 OS 不是另一个聊天壳子。它把 <span class="soft">聊天、工具、文件、知识、记忆、计划、通知、微信等社交通道</span> 统一到同一个工作台里，
+      让 Agent 能持续读取、执行、写回、追踪，而不是只给你一句答案。
+    </p>
+    <div class="ctas">
+      <a class="btn" href="https://github.com/1052666/1052-OS/releases" target="_blank" rel="noopener">下载最新版本 <span class="arrow">-></span></a>
+      <a class="btn ghost" href="#features">查看能力总览 <span class="arrow">-></span></a>
+    </div>
+    <div class="meta">
+      <span>DEFAULT MODEL <b>1052 API / DEEPSEEK-V4-FLASH-SEARCH</b></span>
+      <span>FRONTEND <b>10052</b></span>
+      <span>BACKEND <b>10053</b></span>
+      <span>LICENSE <b>MIT</b></span>
+    </div>
+
+    <div class="window">
+      <div class="chrome">
+        <span class="light"></span>
+        <span class="light"></span>
+        <span class="light"></span>
+        <div class="title">1052 OS / <b>agent workspace</b> / chat + tools + social channels</div>
+      </div>
+      <div class="body">
+        <aside class="sidebar">
+          <h5>Workspace</h5>
+          <div class="item"><span class="g"></span><span class="k">Chat</span><span class="n">01</span></div>
+          <div class="item"><span class="g"></span><span class="k">Files</span><span class="n">02</span></div>
+          <div class="item"><span class="g"></span><span class="k">Notes</span><span class="n">03</span></div>
+          <div class="item"><span class="g"></span><span class="k">Wiki</span><span class="n">04</span></div>
+          <div class="item"><span class="g"></span><span class="k">Resources</span><span class="n">05</span></div>
+          <h5>Agent</h5>
+          <div class="item"><span class="g"></span><span class="k">Memory</span><span class="n">06</span></div>
+          <div class="item"><span class="g"></span><span class="k">Schedules</span><span class="n">07</span></div>
+          <div class="item on"><span class="g"></span><span class="k">WeChat Desktop</span><span class="n">08</span></div>
+          <div class="item"><span class="g"></span><span class="k">Skills</span><span class="n">09</span></div>
+          <div class="item"><span class="g"></span><span class="k">UAPIs</span><span class="n">10</span></div>
+        </aside>
+
+        <main class="chat">
+          <div class="msg me">
+            <div class="who">GROUP MEMBER / @LIXIA</div>
+            <div class="bubble">@黎夏呀 把这周群里提到的需求整理一下，更新到 Wiki，并把待处理项排进任务里。</div>
+          </div>
+
+          <div class="msg">
+            <div class="who">1052 AGENT</div>
+            <div class="bubble">
+              <div class="think"><span class="tri"></span><span>注入群聊上下文、群专属提示词、群记忆与当前权限配置</span></div>
+              我先读取当前群配置和最近工作区记录，然后把需求拆成 Wiki 沉淀和任务编排两部分。
+            </div>
+          </div>
+
+          <div class="toolcall">
+            <div class="head"><span>tool-started / wechat_desktop_group_memory_read</span><span class="k">runtime event</span></div>
+            <div>读取当前微信群独立记忆，补充最近讨论过的模块与关键词。</div>
+          </div>
+
+          <div class="toolcall">
+            <div class="head"><span>tool-finished / wiki_write + task_create</span><span class="k">2 tools completed</span></div>
+            <div>已生成 Wiki 页面、拆分 4 个后续任务，并把结果写回聊天与通知中心。</div>
+          </div>
+
+          <div class="msg">
+            <div class="who">1052 AGENT</div>
+            <div class="bubble">
+              已完成初版整理：我把群里关于桌面微信监听、消息队列和前端面板的要求合并成一份 Wiki 摘要，
+              同时新增了 4 条后续任务。你如果要，我还可以继续把它转成一份 PR 草案。
+            </div>
+          </div>
+        </main>
+
+        <aside class="inspector">
+          <h5>Channel Snapshot</h5>
+          <div class="card">
+            <div class="row"><span>GROUP</span><b>OPC</b></div>
+            <div class="row"><span>MODE</span><b>FULL ACCESS</b></div>
+            <div class="row"><span>QUEUE</span><b>ACTIVE</b></div>
+            <div class="row"><span>POLL</span><b>1S</b></div>
+            <div class="row"><span>BATCH</span><b>1.5S</b></div>
+          </div>
+          <h5>Capabilities</h5>
+          <div class="pill on"><span class="d"></span>群专属提示词</div>
+          <div class="pill on"><span class="d"></span>群记忆读写</div>
+          <div class="pill on"><span class="d"></span>主动发消息</div>
+          <div class="pill on"><span class="d"></span>工具进度回传</div>
+          <div class="pill warn"><span class="d"></span>桌面通道仅限 Windows</div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-tag"><span class="bar"></span>01 / FEATURES / 当前项目状态</div>
+    <h2>不是单一聊天界面，而是一套可以真正落地执行的本地 AI 工作系统。 <span class="en">Not a chat shell. A real local AI workspace with execution, state, and channels.</span></h2>
+
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="num">01</div>
+        <div class="glyph">AG</div>
+        <div class="zh">Agent 运行时</div>
+        <div class="en">Agent Runtime</div>
+        <p>支持能力包按需挂载、P0 路由、上下文压缩、工具执行事件、工具超时保护和统一历史写回。</p>
+      </div>
+      <div class="feat">
+        <div class="num">02</div>
+        <div class="glyph">WX</div>
+        <div class="zh">微信桌面通道</div>
+        <div class="en">Desktop WeChat Channel</div>
+        <p>独立于原扫码微信通道，支持群监听、群提示词、群记忆、群权限开关、主动发消息与消息串行队列。</p>
+      </div>
+      <div class="feat">
+        <div class="num">03</div>
+        <div class="glyph">KN</div>
+        <div class="zh">知识与记忆</div>
+        <div class="en">Knowledge + Memory</div>
+        <p>包含 Notes、Wiki、Resources、长期记忆与敏感记忆，支持 Agent 主动沉淀和运行时注入。</p>
+      </div>
+      <div class="feat">
+        <div class="num">04</div>
+        <div class="glyph">PL</div>
+        <div class="zh">计划与通知</div>
+        <div class="en">Planning + Notifications</div>
+        <p>支持普通日程、单次任务、循环任务、长期任务、Agent 回调和通知中心回写。</p>
+      </div>
+      <div class="feat">
+        <div class="num">05</div>
+        <div class="glyph">TB</div>
+        <div class="zh">工具与技能</div>
+        <div class="en">Toolbox + Skills</div>
+        <p>Search、UAPIs、文件系统、终端、技能市场和本地技能统一编排，模型不再只停留在文字层面。</p>
+      </div>
+      <div class="feat">
+        <div class="num">06</div>
+        <div class="glyph">LL</div>
+        <div class="zh">默认模型配置</div>
+        <div class="en">Model Defaults</div>
+        <p>设置面板已内置 `1052 API` 预设并排在首位，默认模型为 `deepseek-v4-flash-search`。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="modules">
+  <div class="wrap">
+    <div class="sec-tag"><span class="bar"></span>02 / MODULES / 系统能力图谱</div>
+    <h2>当前版本已经接入的主要模块。<span class="en">Core modules shipping in the current project state.</span></h2>
+
+    <div class="modtable">
+      <div class="row">
+        <div class="k"><div class="zh">聊天工作台</div><div class="en">Chat Workspace</div></div>
+        <div class="v">
+          <span class="tag"><span class="d"></span>SSE 流式输出</span>
+          <span class="tag"><span class="d"></span>思考折叠</span>
+          <span class="tag"><span class="d"></span>Markdown / Mermaid / 数学公式</span>
+          <span class="tag a"><span class="d"></span>工具进度状态</span>
+          <span class="tag"><span class="d"></span>统一聊天历史</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="k"><div class="zh">LLM 设置</div><div class="en">LLM Settings</div></div>
+        <div class="v">
+          <span class="tag g"><span class="d"></span>1052 API 默认预设</span>
+          <span class="tag"><span class="d"></span>OpenAI-compatible</span>
+          <span class="tag"><span class="d"></span>多 Provider 兼容</span>
+          <span class="tag"><span class="d"></span>API Key 获取链接</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="k"><div class="zh">文件与仓库</div><div class="en">Files + Repo</div></div>
+        <div class="v">
+          <span class="tag"><span class="d"></span>读写文件</span>
+          <span class="tag"><span class="d"></span>仓库浏览</span>
+          <span class="tag"><span class="d"></span>README 预览</span>
+          <span class="tag"><span class="d"></span>本地终端协作</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="k"><div class="zh">知识沉淀</div><div class="en">Knowledge Layer</div></div>
+        <div class="v">
+          <span class="tag"><span class="d"></span>Notes</span>
+          <span class="tag"><span class="d"></span>Wiki</span>
+          <span class="tag"><span class="d"></span>Resources</span>
+          <span class="tag a"><span class="d"></span>Output Profiles</span>
+          <span class="tag"><span class="d"></span>长期记忆</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="k"><div class="zh">搜索与技能</div><div class="en">Search + Skills</div></div>
+        <div class="v">
+          <span class="tag"><span class="d"></span>聚合搜索</span>
+          <span class="tag"><span class="d"></span>网页正文读取</span>
+          <span class="tag"><span class="d"></span>UAPIs 工具箱</span>
+          <span class="tag g"><span class="d"></span>Skill 市场</span>
+          <span class="tag"><span class="d"></span>本地 Skill 热更新</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="k"><div class="zh">社交通道</div><div class="en">Social Channels</div></div>
+        <div class="v">
+          <span class="tag"><span class="d"></span>扫码微信</span>
+          <span class="tag g"><span class="d"></span>微信桌面群聊通道</span>
+          <span class="tag"><span class="d"></span>飞书 / 企微基础接入</span>
+          <span class="tag a"><span class="d"></span>Agent 主动发送消息</span>
+        </div>
+      </div>
+      <div class="row">
+        <div class="k"><div class="zh">计划系统</div><div class="en">Planning</div></div>
+        <div class="v">
+          <span class="tag"><span class="d"></span>普通日程</span>
+          <span class="tag"><span class="d"></span>单次任务</span>
+          <span class="tag"><span class="d"></span>循环任务</span>
+          <span class="tag"><span class="d"></span>长期任务</span>
+          <span class="tag m"><span class="d"></span>通知写回</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="flow">
+  <div class="wrap">
+    <div class="sec-tag"><span class="bar"></span>03 / FLOW / 一次完整的执行链路</div>
+    <h2>从一句话，到真的完成任务。 <span class="en">From one sentence to actual execution.</span></h2>
+
+    <div class="flow">
+      <div class="step">
+        <div class="no">STEP 01</div>
+        <h4>接收入口</h4>
+        <div class="en">Input arrives</div>
+        <p>请求可以来自网页聊天、任务回调、扫码微信、桌面微信群聊、飞书等入口，统一进入同一套 Agent 运行时。</p>
+        <div class="arr"></div>
+      </div>
+      <div class="step">
+        <div class="no">STEP 02</div>
+        <h4>拼接上下文</h4>
+        <div class="en">Context assembled</div>
+        <p>系统提示词、权限模式、群提示词、群记忆、长期记忆、输出配方和最近历史会按场景动态注入。</p>
+        <div class="arr"></div>
+      </div>
+      <div class="step">
+        <div class="no">STEP 03</div>
+        <h4>挂载工具</h4>
+        <div class="en">Tools mounted</div>
+        <p>P0 先决定是否需要搜索、文件、记忆、Wiki、计划或渠道能力，再按需挂载对应能力包，不把所有说明一股脑塞给模型。</p>
+        <div class="arr"></div>
+      </div>
+      <div class="step">
+        <div class="no">STEP 04</div>
+        <h4>执行与写回</h4>
+        <div class="en">Execution + writeback</div>
+        <p>工具事件会实时回传到前端；任务完成后再把结果写回聊天、通知中心、记忆或外部社交通道。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="schedule">
+  <div class="wrap">
+    <div class="sec-tag"><span class="bar"></span>04 / SCHEDULE / 持续工作</div>
+    <h2>它不只是回复你，也能在你不盯着屏幕的时候继续做事。 <span class="en">The agent keeps working even when you are not staring at the screen.</span></h2>
+
+    <div class="split">
+      <div class="panel">
+        <h3>任务与队列<span class="en">Schedules + queues</span></h3>
+        <div class="list">
+          <div class="tkrow">
+            <div class="t">09:00</div>
+            <div class="title">晨间情报摘要
+              <span class="sub">长期任务 / 聚合搜索 + 网页读取 / 结果推送回聊天与通知中心</span>
+            </div>
+            <div class="state ok">DONE</div>
+          </div>
+          <div class="tkrow">
+            <div class="t">12:30</div>
+            <div class="title">微信群需求整理
+              <span class="sub">桌面微信群入口 / 群专属记忆 / Wiki 写入 / 任务拆分</span>
+            </div>
+            <div class="state run">RUNNING</div>
+          </div>
+          <div class="tkrow">
+            <div class="t">14:00</div>
+            <div class="title">代码仓库同步检查
+              <span class="sub">Repo + Terminal / 读取状态 / 生成变更总结</span>
+            </div>
+            <div class="state pend">QUEUED</div>
+          </div>
+          <div class="tkrow">
+            <div class="t">18:00</div>
+            <div class="title">群聊日报回传
+              <span class="sub">主动发送消息 / 微信桌面通道 / 仅在群权限开启时执行</span>
+            </div>
+            <div class="state pend">QUEUED</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>通知中心<span class="en">Notification center</span></h3>
+        <div class="list">
+          <div class="notif">
+            <div class="ic">OK</div>
+            <div class="t">
+              <div class="ttl">工具调用完成并已写回结果</div>
+              <div class="sub">`tool-started` 与 `tool-finished` 事件会显示在前端，工具超时不会再无限静默卡住整条链路。</div>
+              <div class="meta">AGENT RUNTIME / TOOL EVENTS</div>
+            </div>
+          </div>
+          <div class="notif">
+            <div class="ic">WX</div>
+            <div class="t">
+              <div class="ttl">桌面微信群进入独立队列</div>
+              <div class="sub">新消息按 1.5 秒窗口聚合，同群串行处理；Agent 回复完成并发送成功后才会取下一批。</div>
+              <div class="meta">WECHAT DESKTOP / SERIAL QUEUE</div>
+            </div>
+          </div>
+          <div class="notif">
+            <div class="ic">KB</div>
+            <div class="t">
+              <div class="ttl">群聊记忆单独存储</div>
+              <div class="sub">群里产生的记忆写入微信群独立记忆槽，普通聊天场景则通过工具形式显式提供给模型使用。</div>
+              <div class="meta">MEMORY / GROUP-SCOPED</div>
+            </div>
+          </div>
+          <div class="notif">
+            <div class="ic">AI</div>
+            <div class="t">
+              <div class="ttl">默认模型预设更新</div>
+              <div class="sub">设置页首个预设已切换为 `1052 API`，基础地址与模型号已内置，首次启动更直接。</div>
+              <div class="meta">SETTINGS / DEFAULT PROFILE</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="display:grid; grid-template-columns: 1fr 1fr; gap:60px">
+    <div>
+      <div class="sec-tag"><span class="bar"></span>05 / WHY / 设计方向</div>
+      <blockquote class="quote">
+        好的 AI 不是更花哨的聊天框，<br/>而是一套会替你 <span class="accent">持续工作</span> 的本地系统。
+        <span class="en">Good AI is not a fancier chat box. It is a local system that keeps working for you.</span>
+      </blockquote>
+    </div>
+    <div style="align-self:end">
+      <p style="font-size:16px; line-height:1.75; color:var(--ink-soft); max-width:52ch">
+        1052 OS 的核心不是“回答问题”，而是把会话、工具、知识、记忆、任务和社交通道放进同一个可控环境。
+        这样 Agent 才真正拥有上下文、权限和执行能力，而不是永远停留在“我不能直接帮你做这件事”。
+      </p>
+      <p style="font-size:14px; color:var(--ink-mute); font-family:var(--mono); letter-spacing:0.05em; margin-top:24px">
+        1052 OS / local-first / workspace-not-chatbox
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-tag"><span class="bar"></span>06 / FAQ / 常见问题</div>
+    <h2>你大概率会先问这些。 <span class="en">The first questions most people ask.</span></h2>
+
+    <div class="faq">
+      <details open>
+        <summary><span class="n">Q 01</span> 1052 OS 和普通 AI 聊天工具最大的区别是什么？<span class="plus">+</span></summary>
+        <div class="body">
+          普通聊天工具更像一个回答框；1052 OS 是一个本地 Agent 工作台。它能接入文件、任务、记忆、Wiki、搜索、终端和社交通道，并把执行状态持续写回系统。
+          <span class="en">It is a local agent workspace, not just a response box.</span>
+        </div>
+      </details>
+      <details>
+        <summary><span class="n">Q 02</span> 默认模型配置是什么？<span class="plus">+</span></summary>
+        <div class="body">
+          当前设置页默认预设是 `1052 API`，Base URL 为 `https://api.lxj.asia/v1`，模型为 `deepseek-v4-flash-search`。API Key 获取地址是 `https://api.lxj.asia/register?aff=UOBG`。
+          <span class="en">The default profile is 1052 API with DeepSeek V4 Flash Search.</span>
+        </div>
+      </details>
+      <details>
+        <summary><span class="n">Q 03</span> 微信桌面通道和原扫码微信通道有什么区别？<span class="plus">+</span></summary>
+        <div class="body">
+          桌面微信通道是独立的新社交通道板块，针对 Windows 桌面微信窗口自动化，支持群聊监听、群提示词、群记忆和主动发送；它不会和原扫码微信板块混在一起。
+          <span class="en">Desktop WeChat is a separate Windows-only channel, distinct from the older scan-login WeChat integration.</span>
+        </div>
+      </details>
+      <details>
+        <summary><span class="n">Q 04</span> 数据默认存在哪里？<span class="plus">+</span></summary>
+        <div class="body">
+          运行时数据默认落在项目根目录下的 `data/`，包括聊天历史、记忆、Wiki、Notes、Resources、生成图片和渠道状态等。项目本身遵循本地优先。
+          <span class="en">Runtime data is stored locally in the project's data directory.</span>
+        </div>
+      </details>
+      <details>
+        <summary><span class="n">Q 05</span> 工具调用卡住时现在怎么处理？<span class="plus">+</span></summary>
+        <div class="body">
+          新版本已经补上工具执行事件和单工具超时保护。前端会显示工具开始、完成或失败状态，工具不会再无限静默占住整条消息链路。
+          <span class="en">Tool calls now emit progress events and have timeout protection.</span>
+        </div>
+      </details>
+      <details>
+        <summary><span class="n">Q 06</span> 能自定义扩展吗？<span class="plus">+</span></summary>
+        <div class="body">
+          可以。项目支持本地 Skills、UAPIs、文件系统工具、搜索和终端协作。你既可以挂新的能力包，也可以把它当作个人本地代理工作台继续深改。
+          <span class="en">Yes. The project is designed to be extended with skills, tools, and local integrations.</span>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section id="download" style="border-bottom:0; padding-bottom:80px">
+  <div class="wrap">
+    <div class="cta">
+      <div class="grid-bg"></div>
+      <div>
+        <div class="mono tiny" style="color:#ffffff99; letter-spacing:0.14em; text-transform:uppercase">07 / GET STARTED</div>
+        <h2>让这套本地 Agent 工作台，<br/>今晚就开始<span class="soft">替你干活</span></h2>
+        <div class="en">Ship a local AI workspace that can remember, execute, schedule, and reach people.</div>
+        <div class="ctas">
+          <a class="btn primary" href="https://github.com/1052666/1052-OS/releases" target="_blank" rel="noopener">下载最新版本 <span class="arrow">-></span></a>
+          <a class="btn ghost" href="https://github.com/1052666/1052-OS" target="_blank" rel="noopener">打开 GitHub 仓库 <span class="arrow">-></span></a>
+        </div>
+      </div>
+      <ul>
+        <li><span>License</span><b>MIT</b></li>
+        <li><span>Default API</span><b>1052 API</b></li>
+        <li><span>Model</span><b>deepseek-v4-flash-search</b></li>
+        <li><span>Ports</span><b>10052 / 10053</b></li>
+        <li><span>Repo</span><b>github.com/1052666/1052-OS</b></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <div class="brand" style="margin-bottom:14px">
+        <span class="mark">10</span>
+        <span class="name">1052 OS</span>
+      </div>
+      <p class="sig">
+        本地优先、工具驱动、可接入社交通道的个人 AI 工作台。<br/>
+        A local-first personal AI workspace that actually gets things done.
+      </p>
+      <p class="mono tiny" style="color:var(--ink-mute); margin-top:24px; letter-spacing:0.08em">© 2026 / 1052 / MIT LICENSE</p>
+    </div>
+    <div class="cols">
+      <div>
+        <h6>Product</h6>
+        <ul>
+          <li><a href="#features">能力总览</a></li>
+          <li><a href="#modules">模块图谱</a></li>
+          <li><a href="#flow">执行链路</a></li>
+          <li><a href="#schedule">任务与通知</a></li>
+        </ul>
+      </div>
+      <div>
+        <h6>Project</h6>
+        <ul>
+          <li><a href="https://github.com/1052666/1052-OS" target="_blank" rel="noopener">GitHub Repository</a></li>
+          <li><a href="https://github.com/1052666/1052-OS/releases" target="_blank" rel="noopener">Releases</a></li>
+          <li><a href="https://github.com/1052666/1052-OS/issues" target="_blank" rel="noopener">Issues</a></li>
+          <li><a href="https://api.lxj.asia/register?aff=UOBG" target="_blank" rel="noopener">1052 API Key</a></li>
+        </ul>
+      </div>
+      <div>
+        <h6>More</h6>
+        <ul>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="#download">下载</a></li>
+          <li><a href="#top">返回顶部</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
