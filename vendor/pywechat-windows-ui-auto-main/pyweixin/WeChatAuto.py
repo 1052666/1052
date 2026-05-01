@@ -218,7 +218,20 @@ class Contacts():
         rec=moments_list.children()[0].rectangle()
         coords=(rec.right-60,rec.bottom-35)
         mouse.click(coords=coords)
-        profile_pane=moments_window.child_window(class_name='mmui::ProfileUniquePop')
+        # 兼容不同微信版本: 4.1.9.30 弹框是顶层窗口, 4.0 弹框是朋友圈子控件
+        profile_pane=None
+        try:
+            profile_pane=Desktop(backend='uia').window(**Windows.PopUpProfileWindow)
+        except Exception:
+            pass
+        if profile_pane is None:
+            try:
+                profile_pane=moments_window.child_window(class_name='mmui::ProfileUniquePop')
+            except Exception:
+                pass
+        if profile_pane is None:
+            moments_window.close()
+            raise Exception('无法找到个人信息弹框')
         text_items=profile_pane.descendants(control_type='Text')
         texts=[item.window_text() for item in text_items]
         nickname=''
