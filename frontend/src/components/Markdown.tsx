@@ -116,6 +116,10 @@ let nextMermaidId = 0
 
 const markdownHtmlSchema: SanitizeSchema = {
   ...defaultSchema,
+  protocols: {
+    ...defaultSchema.protocols,
+    src: [],
+  },
   tagNames: [
     ...(defaultSchema.tagNames ?? []),
     'article',
@@ -127,6 +131,7 @@ const markdownHtmlSchema: SanitizeSchema = {
   ],
   attributes: {
     ...defaultSchema.attributes,
+    img: [...(defaultSchema.attributes?.img ?? []), 'alt', 'title', 'width', 'height'],
     div: [
       ...(defaultSchema.attributes?.div ?? []),
       ['className', /^markdown-/],
