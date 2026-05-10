@@ -288,6 +288,12 @@ async function postChatCompletion(
   }
 
   let res: Response
+  // Combine external abort with a 120s connection timeout to prevent
+  // indefinite hangs when the LLM provider never sends response headers.
+  const connectionTimeout = AbortSignal.timeout(120_000)
+  const combinedSignal = abortSignal
+    ? AbortSignal.any([abortSignal, connectionTimeout])
+    : connectionTimeout
   try {
     const requestBaseUrl = normalizeMiniMaxBaseUrl(cfg)
     const headers: Record<string, string> = {
@@ -300,11 +306,14 @@ async function postChatCompletion(
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
-      signal: abortSignal,
+      signal: combinedSignal,
     })
   } catch (error) {
     if (abortSignal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
       throw httpError(499, 'LLM request aborted')
+    }
+    if (connectionTimeout.aborted) {
+      throw httpError(504, 'LLM 连接超时（120s 未收到响应头），请检查网络或 LLM 配置。')
     }
     throw httpError(502, `无法连接 LLM: ${(error as Error).message}`)
   }
@@ -325,6 +334,35 @@ async function postChatCompletion(
       const retryPayload = { ...payload }
       delete retryPayload[key]
       return postChatCompletion(cfg, retryPayload, tools, abortSignal)
+    }
+  }
+
+  // Auto-recover from context_length_exceeded 400 errors by trimming the
+  // conversation. During long tool-call chains the in-request conversation
+  // can exceed the model's context window. We trim older messages (keeping
+  // the system prompt + first message and the most recent messages) and retry.
+  const isContextLengthError =
+    (res.status === 400 || res.status === 413) &&
+    /context.{0,20}length|too.{0,10}(many|long)|maximum.{0,10}(context|token)|token.{0,10}(limit|exceed)|max_tokens|content_length_limit|请求体过大|上下文.{0,4}(超|过|限)|输入.{0,4}(过长|超)/i.test(body)
+  if (isContextLengthError && !payload.__contextTrimRetried) {
+    const messages = payload.messages as Array<Record<string, unknown>> | undefined
+    if (messages && messages.length > 6) {
+      // Keep the system message(s) at the start, plus the most recent half of messages
+      const systemEnd = messages.findIndex((m) => m.role !== 'system')
+      const systemMessages = systemEnd > 0 ? messages.slice(0, systemEnd) : messages.slice(0, 1)
+      const rest = messages.slice(systemMessages.length)
+      // Keep only the latter ~60% of non-system messages, safely slicing at tool boundaries
+      const keepCount = Math.max(4, Math.floor(rest.length * 0.6))
+      let cutIndex = rest.length - keepCount
+      // Don't cut in the middle of a tool-call group — walk back to the assistant
+      while (cutIndex > 0 && rest[cutIndex]?.role === 'tool') cutIndex--
+      // If we hit the start and it's still a tool message, skip forward past orphans
+      while (cutIndex < rest.length && rest[cutIndex]?.role === 'tool') cutIndex++
+      if (cutIndex > 0 && cutIndex < rest.length) {
+        const trimmed = [...systemMessages, ...rest.slice(cutIndex)]
+        const retryPayload = { ...payload, messages: trimmed, __contextTrimRetried: true }
+        return postChatCompletion(cfg, retryPayload, tools, abortSignal)
+      }
     }
   }
 
@@ -713,7 +751,12 @@ export async function chatCompletion(
     const json = await res.json().catch(() => null)
     const result = adapter.parseResponse(json, adapterCtx)
     if (!result.content && result.toolCalls.length === 0) {
-      throw httpError(502, 'LLM 响应格式异常：未找到有效的回复内容或工具调用')
+      return {
+        role: 'assistant' as const,
+        content: '',
+        toolCalls: [],
+        usage: result.usage,
+      }
     }
     result.usage = result.usage ?? fallbackUsage(messages, result.content)
     return result
@@ -745,7 +788,12 @@ export async function chatCompletion(
   const content = typeof message?.content === 'string' ? message.content : ''
 
   if (content.length === 0 && toolCalls.length === 0) {
-    throw httpError(502, 'LLM 响应格式异常：未找到有效的回复内容或工具调用')
+    return {
+      role: 'assistant' as const,
+      content: '',
+      toolCalls: [],
+      usage: normalizeUsage(data?.usage),
+    }
   }
 
   return {
@@ -811,7 +859,6 @@ export async function* chatCompletionStream(
 
   let res: Response
   try {
-    armIdleTimer()
     res = await postChatCompletion(
       cfg,
       buildPayload(cfg, messages, tools, true, options),
@@ -819,19 +866,19 @@ export async function* chatCompletionStream(
       composite.signal,
     )
   } catch (error) {
-    clearIdleTimer()
     detachExternal()
-    if (idleAborted) {
-      throw httpError(504, `LLM 流式响应空闲超时（${Math.floor(idleTimeoutMs / 1000)}s）`)
-    }
     throw error
   }
 
   if (!res.body) {
-    clearIdleTimer()
     detachExternal()
     throw httpError(502, 'LLM 流式响应格式异常：缺少 body')
   }
+
+  // Start idle timer only AFTER the HTTP response headers arrive. The model
+  // may need substantial time (reasoning, large context) before it begins
+  // streaming data; we don't want the idle timer to fire during that phase.
+  armIdleTimer()
 
   const reader = res.body.getReader()
   const decoder = new TextDecoder('utf-8')
@@ -970,8 +1017,17 @@ export async function* chatCompletionStream(
 
   // Reasoning is now part of `content` (wrapped in <think>...</think>), so
   // a reasoning-only turn no longer trips this check.
+  // Instead of throwing when both are empty, return a graceful empty result.
+  // The caller (agent service) decides how to handle it — e.g. if previous
+  // rounds already produced deltas (image generation), the stream can still
+  // end successfully instead of surfacing a confusing "响应格式异常" error.
   if (content.length === 0 && normalizedToolCalls.length === 0) {
-    throw httpError(502, 'LLM 响应格式异常：未找到有效的回复内容或工具调用')
+    return {
+      role: 'assistant' as const,
+      content: '',
+      toolCalls: [],
+      usage,
+    }
   }
 
   return {
@@ -1023,7 +1079,6 @@ async function* adapterStream(
 
   let res: Response
   try {
-    armIdleTimer()
     res = await fetch(req.url, {
       method: 'POST',
       headers: req.headers,
@@ -1031,22 +1086,26 @@ async function* adapterStream(
       signal: composite.signal,
     })
   } catch (error) {
-    clearIdleTimer(); detachExternal()
-    if (idleAborted) throw httpError(504, `LLM 流式响应空闲超时（${Math.floor(idleTimeoutMs / 1000)}s）`)
+    detachExternal()
     if (externalSignal?.aborted) throw httpError(499, 'LLM request aborted')
     throw httpError(502, `无法连接 LLM: ${(error as Error).message}`)
   }
 
   if (!res.ok) {
-    clearIdleTimer(); detachExternal()
+    detachExternal()
     const body = await res.text().catch(() => '')
     throw httpError(res.status, `LLM 返回 ${res.status}: ${body.slice(0, 500) || res.statusText}`)
   }
 
   if (!res.body) {
-    clearIdleTimer(); detachExternal()
+    detachExternal()
     throw httpError(502, 'LLM 流式响应格式异常：缺少 body')
   }
+
+  // Start idle timer only AFTER response headers arrive — same reasoning as
+  // chatCompletionStream: the model may need significant time for reasoning
+  // before it begins streaming, and we must not abort during that phase.
+  armIdleTimer()
 
   const reader = res.body.getReader()
   const decoder = new TextDecoder('utf-8')
@@ -1115,7 +1174,12 @@ async function* adapterStream(
 
   const normalizedToolCalls = toolCallBuffer.finalize()
   if (content.length === 0 && normalizedToolCalls.length === 0) {
-    throw httpError(502, 'LLM 响应格式异常：未找到有效的回复内容或工具调用')
+    return {
+      role: 'assistant' as const,
+      content: '',
+      toolCalls: [],
+      usage,
+    }
   }
 
   return {

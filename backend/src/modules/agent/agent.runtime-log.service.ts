@@ -13,6 +13,7 @@ export type AgentRuntimeLogStage =
   | 'business-tools'
   | 'progressive-complete'
   | 'progressive-round-limit'
+  | 'progressive-time-limit'
 
 type AgentRuntimeCheckpointState = Pick<
   AgentCheckpoint,

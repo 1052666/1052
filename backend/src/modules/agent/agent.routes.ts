@@ -368,7 +368,7 @@ agentRouter.post('/chat/stream', async (req, res, next) => {
       }
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500
-      const message = error instanceof Error ? error.message : '流式调用失败'
+      const message = error instanceof Error ? error.message : '模型调用出错，请检查配置后重试'
       if (!aborted) {
         write({ type: 'error', status, message })
       }

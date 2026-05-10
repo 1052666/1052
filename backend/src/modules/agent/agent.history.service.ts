@@ -3,6 +3,40 @@ import type { ChatHistory, StoredChatMessage } from './agent.types.js'
 
 const FILE = 'chat-history.json'
 const historyListeners = new Set<(event: ChatHistoryEvent) => void>()
+
+// ── Auto-compaction ────────────────────────────────────────────────
+let autoCompactRunning = false
+
+async function maybeAutoCompact(messageCount: number, reason: ChatHistorySaveReason) {
+  // Only trigger on 'sync' (frontend saves after stream) and 'replace' (full overwrites).
+  // Skip 'append' (mid-stream), 'compact', 'clear', 'repair', 'command-new' to avoid
+  // compacting during active streams or causing loops.
+  if (reason !== 'sync' && reason !== 'replace') return
+  if (autoCompactRunning) return
+
+  try {
+    // Dynamic import to avoid circular dependency
+    const { getSettings } = await import('../settings/settings.service.js')
+    const settings = await getSettings()
+    if (!settings.agent.autoCompactEnabled) return
+    if (messageCount < settings.agent.autoCompactThreshold) return
+
+    autoCompactRunning = true
+    console.log(
+      `[auto-compact] Threshold reached (${messageCount} >= ${settings.agent.autoCompactThreshold}), starting background compaction…`,
+    )
+
+    const { compactChatHistory } = await import('./agent.compaction.service.js')
+    const result = await compactChatHistory()
+    console.log(
+      `[auto-compact] Done. ${result.originalCount} messages → compacted. Backup: ${result.backupPath}`,
+    )
+  } catch (error) {
+    console.error('[auto-compact] Failed:', (error as Error).message || error)
+  } finally {
+    autoCompactRunning = false
+  }
+}
 export type ChatHistorySaveReason =
   | 'replace'
   | 'sync'
@@ -208,6 +242,8 @@ export async function saveChatHistory(
   const history: ChatHistory = { messages }
   await writeJson(FILE, history)
   emitHistoryEvent({ reason })
+  // Fire-and-forget: trigger auto-compaction if threshold exceeded
+  void maybeAutoCompact(messages.length, reason)
   return history
 }
 

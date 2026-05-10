@@ -27,9 +27,10 @@ import { wechatDesktopTools } from './tools/wechat-desktop.tools.js'
 import { websearchTools } from './tools/websearch.tools.js'
 import { wikiTools } from './tools/wiki.tools.js'
 import { pkmTools } from './tools/pkm.tools.js'
+import { ocrTools } from './tools/ocr.tools.js'
 import { getSettings } from '../settings/settings.service.js'
 
-const TOOL_EXECUTION_TIMEOUT_MS = 120_000
+const TOOL_EXECUTION_TIMEOUT_MS = 25 * 60_000
 
 /**
  * Maximum size, in characters, that a single tool result JSON is allowed to
@@ -73,6 +74,7 @@ const AGENT_TOOLS: AgentTool[] = [
   ...sqlTools,
   ...orchestrationTools,
   ...terminalTools,
+  ...ocrTools,
 ]
 const TOOL_MAP = new Map(AGENT_TOOLS.map((tool) => [tool.name, tool]))
 
@@ -320,6 +322,25 @@ export function getAgentToolDefinitionsForNames(names: readonly string[]): LLMTo
   return tools
 }
 
+/** Max retries for transient tool execution errors (network, 502/503/429). */
+const MAX_TOOL_RETRIES = 2
+
+/** Returns true if the error is transient and the tool call should be retried. */
+function isRetriableToolError(error: unknown): boolean {
+  if (error instanceof HttpError) {
+    // 502 Bad Gateway, 503 Service Unavailable, 429 Rate Limit — transient
+    if (error.status === 502 || error.status === 503 || error.status === 429) return true
+  }
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
+    // Network errors that are typically transient
+    if (msg.includes('fetch failed') || msg.includes('econnreset') ||
+        msg.includes('econnrefused') || msg.includes('etimedout') ||
+        msg.includes('socket hang up') || msg.includes('network')) return true
+  }
+  return false
+}
+
 export async function executeToolCall(
   toolCall: LLMToolCall,
   runtimeContext?: AgentToolRuntimeContext,
@@ -332,39 +353,49 @@ export async function executeToolCall(
     return buildToolFailureMessage(
       toolCall,
       toolCall.function.name,
-      `未找到工具: ${toolCall.function.name}`,
+      `未找到工具: ${toolCall.function.name}。请检查工具名称是否正确。`,
     )
   }
 
-  try {
-    const parsedArgs = parseArguments(toolCall.function.arguments)
-    const confirmedArgs =
-      fullAccess && parsedArgs && typeof parsedArgs === 'object' && !Array.isArray(parsedArgs)
-        ? { ...(parsedArgs as Record<string, unknown>), confirmed: true }
-        : parsedArgs
-    const args =
-      runtimeContext &&
-      confirmedArgs &&
-      typeof confirmedArgs === 'object' &&
-      !Array.isArray(confirmedArgs)
-        ? { ...(confirmedArgs as Record<string, unknown>), __runtimeContext: runtimeContext }
-        : confirmedArgs
-    const result = await withToolTimeout(tool.execute(args), tool.name)
+  let lastError: Error | HttpError | null = null
 
-    return {
-      role: 'tool',
-      toolCallId: toolCall.id,
-      name: tool.name,
-      content: buildTruncatedResultContent(result),
+  for (let attempt = 0; attempt <= MAX_TOOL_RETRIES; attempt += 1) {
+    try {
+      const parsedArgs = parseArguments(toolCall.function.arguments)
+      const confirmedArgs =
+        fullAccess && parsedArgs && typeof parsedArgs === 'object' && !Array.isArray(parsedArgs)
+          ? { ...(parsedArgs as Record<string, unknown>), confirmed: true }
+          : parsedArgs
+      const args =
+        runtimeContext &&
+        confirmedArgs &&
+        typeof confirmedArgs === 'object' &&
+        !Array.isArray(confirmedArgs)
+          ? { ...(confirmedArgs as Record<string, unknown>), __runtimeContext: runtimeContext }
+          : confirmedArgs
+      const result = await withToolTimeout(tool.execute(args), tool.name)
+
+      return {
+        role: 'tool',
+        toolCallId: toolCall.id,
+        name: tool.name,
+        content: buildTruncatedResultContent(result),
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('工具调用失败')
+
+      // Retry on transient errors with backoff
+      if (attempt < MAX_TOOL_RETRIES && isRetriableToolError(error)) {
+        console.warn(`[tool] ${tool.name} transient error (attempt ${attempt + 1}/${MAX_TOOL_RETRIES + 1}): ${lastError.message}`)
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)))
+        continue
+      }
+      break
     }
-  } catch (error) {
-    const message =
-      error instanceof HttpError || error instanceof Error
-        ? error.message
-        : '工具调用失败'
-
-    return buildToolFailureMessage(toolCall, tool.name, message)
   }
+
+  const message = lastError?.message ?? '工具调用失败'
+  return buildToolFailureMessage(toolCall, tool.name, message)
 }
 
 /**

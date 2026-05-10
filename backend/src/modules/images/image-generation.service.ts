@@ -126,7 +126,7 @@ function filePrefix(now: Date) {
 }
 
 async function fetchRemoteImage(url: string) {
-  const response = await fetch(url)
+  const response = await fetch(url, { signal: AbortSignal.timeout(60_000) })
   if (!response.ok) {
     throw new HttpError(
       502,
@@ -260,11 +260,15 @@ async function generateOpenAICompatibleImages(
         Authorization: `Bearer ${configured.apiKey}`,
       },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(90_000),
     })
   } catch (error) {
+    const msg = (error as Error).message
     throw new HttpError(
       502,
-      `Unable to reach the image generation provider: ${(error as Error).message}`,
+      msg.includes('timed out') || msg.includes('abort')
+        ? `图片生成请求超时（90s），请检查图片 API 配置或稍后重试。`
+        : `Unable to reach the image generation provider: ${msg}`,
     )
   }
 
@@ -355,11 +359,15 @@ async function generateGeminiNativeImages(
           'x-goog-api-key': configured.apiKey,
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(90_000),
       })
     } catch (error) {
+      const msg = (error as Error).message
       throw new HttpError(
         502,
-        `Unable to reach the Gemini image provider: ${(error as Error).message}`,
+        msg.includes('timed out') || msg.includes('abort')
+          ? `Gemini 图片生成请求超时（90s），请检查 API 配置或稍后重试。`
+          : `Unable to reach the Gemini image provider: ${msg}`,
       )
     }
 

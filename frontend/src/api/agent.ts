@@ -249,14 +249,14 @@ export const AgentApi = {
         signal,
       })
     } catch (e) {
-      handlers.onError((e as Error).message || '网络错误')
+      handlers.onError((e as Error).message || '网络连接失败，请检查网络后重试')
       return
     }
 
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '')
       const msg = tryExtract(text) ?? res.statusText
-      handlers.onError(msg || `HTTP ${res.status}`)
+      handlers.onError(msg || `服务端返回错误 (HTTP ${res.status})，请稍后重试`)
       return
     }
 
@@ -264,7 +264,7 @@ export const AgentApi = {
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
     let terminal = false
-    let receivedDelta = false
+    let receivedActivity = false
 
     const handleEvent = (event: string) => {
       for (const line of event.split(/\r?\n/)) {
@@ -275,11 +275,13 @@ export const AgentApi = {
         try {
           const obj = JSON.parse(data) as StreamEvent
           if (obj.type === 'delta' && obj.content) {
-            receivedDelta = true
+            receivedActivity = true
             handlers.onDelta(obj.content)
           } else if (obj.type === 'usage' && obj.usage) {
+            receivedActivity = true
             handlers.onUsage(obj.usage)
           } else if (obj.type === 'tool-started' && typeof obj.name === 'string') {
+            receivedActivity = true
             handlers.onToolStarted?.({
               name: obj.name,
               callId: obj.callId,
@@ -287,6 +289,7 @@ export const AgentApi = {
               dangerous: obj.dangerous,
             })
           } else if (obj.type === 'tool-finished' && typeof obj.name === 'string') {
+            receivedActivity = true
             handlers.onToolFinished?.({
               name: obj.name,
               ok: obj.ok === true,
@@ -296,19 +299,23 @@ export const AgentApi = {
               durationMs: obj.durationMs,
             })
           } else if (obj.type === 'context-upgrade-requested' && Array.isArray(obj.packs)) {
+            receivedActivity = true
             handlers.onUpgradeRequested?.(obj.packs, obj.reason ?? '')
           } else if (obj.type === 'context-upgrade-applying' && Array.isArray(obj.packs)) {
+            receivedActivity = true
             handlers.onUpgradeApplying?.(obj.packs)
           } else if (obj.type === 'context-upgrade-applied' && Array.isArray(obj.packs)) {
+            receivedActivity = true
             handlers.onUpgradeApplied?.(obj.packs)
           } else if (obj.type === 'context-upgrade-aborted' && typeof obj.stage === 'string') {
+            receivedActivity = true
             handlers.onUpgradeAborted?.(obj.stage)
           } else if (obj.type === 'done') {
             terminal = true
             handlers.onDone()
           } else if (obj.type === 'error') {
             terminal = true
-            handlers.onError(obj.message ?? '流式调用失败')
+            handlers.onError(obj.message ?? '模型返回错误，请稍后重试')
           }
         } catch {
           // Ignore malformed SSE fragments from proxies or partial writes.
@@ -336,12 +343,12 @@ export const AgentApi = {
       if (!terminal && buffer.trim()) handleEvent(buffer)
 
       if (!terminal) {
-        if (receivedDelta) handlers.onDone()
-        else handlers.onError('连接已结束，但没有收到模型回复')
+        if (receivedActivity) handlers.onDone()
+        else handlers.onError('连接已断开但未收到模型回复，可能是模型端点不可用或配置有误')
       }
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
-        handlers.onError((e as Error).message || '流中断')
+        handlers.onError((e as Error).message || '流式连接意外中断，请重试')
       }
     } finally {
       reader.releaseLock()

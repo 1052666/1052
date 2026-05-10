@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let tempDir = ''
 const execFileAsync = promisify(execFile)
+const pythonExecutable = process.platform === 'win32' ? 'python' : 'python3'
 
 beforeEach(async () => {
   tempDir = await fs.mkdtemp(path.join(os.tmpdir(), '1052-intel-center-'))
@@ -132,7 +133,7 @@ print(json.dumps({
     await fs.copyFile(sourceScript, scriptPath)
     await fs.writeFile(snapshotPath, JSON.stringify(originalSnapshot, null, 2), 'utf-8')
 
-    const { stdout } = await execFileAsync('python3', ['scripts/intel.py'], {
+    const { stdout } = await execFileAsync(pythonExecutable, ['scripts/intel.py'], {
       cwd: skillRoot,
       env: {
         ...process.env,

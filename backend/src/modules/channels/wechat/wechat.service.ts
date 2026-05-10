@@ -750,10 +750,13 @@ async function handleInboundWechatMessage(
 
   let finalText = ''
   let usage: TokenUsage | undefined
+  const channelAbort = new AbortController()
+  const channelTimeout = setTimeout(() => channelAbort.abort(), 10 * 60_000)
   try {
     const history = await getChatHistory()
     const chatMessages = toChatMessages(history.messages, assistantMessage.id)
     for await (const event of sendMessageStream(chatMessages, {
+      abortSignal: channelAbort.signal,
       runtimeContext: {
         source: {
           channel: 'wechat',
@@ -807,7 +810,7 @@ async function handleInboundWechatMessage(
     )
   } catch (error) {
     const messageText = sanitizeError(error)
-    const failureNotice = `微信通道处理失败：${messageText}`
+    const failureSuffix = `\n\n⚠️ 微信通道出错：${messageText}`
     const contextToken =
       message.context_token ?? (await getWechatContextToken(account.accountId, peerId))
     let deliveryStatus: 'sent' | 'failed' = 'failed'
@@ -817,7 +820,7 @@ async function handleInboundWechatMessage(
       await sendWechatRichMessage({
         account,
         peerId,
-        text: failureNotice,
+        text: `⚠️ 微信通道出错：${messageText}`,
         contextToken,
       })
       deliveryStatus = 'sent'
@@ -832,7 +835,9 @@ async function handleInboundWechatMessage(
         ...current,
         streaming: false,
         error: true,
-        content: current.content || failureNotice,
+        content: current.content
+          ? current.content + failureSuffix
+          : `⚠️ 微信通道出错：${messageText}`,
         meta: {
           ...current.meta,
           delivery: {
@@ -846,6 +851,8 @@ async function handleInboundWechatMessage(
       'wechat-agent-error',
     )
     throw error
+  } finally {
+    clearTimeout(channelTimeout)
   }
 
   void userMessage

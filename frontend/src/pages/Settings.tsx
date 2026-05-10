@@ -30,7 +30,7 @@ import {
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 function isUpdateRunActive(run: UpdateRun | null): boolean {
-  return run?.status === 'queued' || run?.status === 'running'
+  return run?.status === 'queued' || run?.status === 'running' || run?.status === 'handed_off'
 }
 
 function formatUpdateTime(value: string | null | undefined): string {
@@ -232,6 +232,11 @@ export default function Settings() {
   const [imageOutputFormat, setImageOutputFormat] =
     useState<PublicSettings['imageGeneration']['outputFormat']>('png')
   const [imageOutputCompression, setImageOutputCompression] = useState(80)
+  const [ocrProvider, setOcrProvider] =
+    useState<PublicSettings['ocr']['provider']>('uapis')
+  const [ocrCustomBaseUrl, setOcrCustomBaseUrl] = useState('')
+  const [ocrCustomModelId, setOcrCustomModelId] = useState('')
+  const [ocrCustomApiKey, setOcrCustomApiKey] = useState('')
   const [uapisApiKey, setUapisApiKey] = useState('')
   const [userPrompt, setUserPrompt] = useState('')
   const [streaming, setStreaming] = useState(true)
@@ -241,6 +246,8 @@ export default function Settings() {
   const [providerCachingEnabled, setProviderCachingEnabled] = useState(true)
   const [checkpointEnabled, setCheckpointEnabled] = useState(true)
   const [seedOnResumeEnabled, setSeedOnResumeEnabled] = useState(true)
+  const [autoCompactEnabled, setAutoCompactEnabled] = useState(true)
+  const [autoCompactThreshold, setAutoCompactThreshold] = useState(100)
   const [morningBriefEnabled, setMorningBriefEnabled] = useState(false)
   const [morningBriefTime, setMorningBriefTime] = useState('09:30')
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -290,6 +297,9 @@ export default function Settings() {
         setImageBackground(settings.imageGeneration.background)
         setImageOutputFormat(settings.imageGeneration.outputFormat)
         setImageOutputCompression(settings.imageGeneration.outputCompression)
+        setOcrProvider(settings.ocr.provider)
+        setOcrCustomBaseUrl(settings.ocr.customBaseUrl)
+        setOcrCustomModelId(settings.ocr.customModelId)
         setUserPrompt(settings.agent.userPrompt)
         setStreaming(settings.agent.streaming)
         setFullAccess(settings.agent.fullAccess)
@@ -299,6 +309,8 @@ export default function Settings() {
         setCheckpointEnabled(settings.agent.checkpointEnabled)
         setSeedOnResumeEnabled(settings.agent.seedOnResumeEnabled)
         setUpgradeDebugEventsEnabled(settings.agent.upgradeDebugEventsEnabled)
+        setAutoCompactEnabled(settings.agent.autoCompactEnabled)
+        setAutoCompactThreshold(settings.agent.autoCompactThreshold)
         setMorningBriefEnabled(settings.agent.morningBrief.enabled)
         setMorningBriefTime(settings.agent.morningBrief.time)
         setTheme(settings.appearance.theme)
@@ -326,7 +338,7 @@ export default function Settings() {
 
   useEffect(() => {
     let cancelled = false
-    UpdatesApi.status()
+    UpdatesApi.check()
       .then((status) => {
         if (!cancelled) setUpdateStatus(status)
       })
@@ -345,15 +357,16 @@ export default function Settings() {
       void UpdatesApi.run(updateRun.id)
         .then((nextRun) => {
           setUpdateRun(nextRun)
-          if (nextRun.status === 'success' || nextRun.status === 'failed') {
+          if (nextRun.status === 'success' || nextRun.status === 'failed' || nextRun.status === 'handed_off') {
             void UpdatesApi.status().then(setUpdateStatus).catch(() => undefined)
           }
         })
-        .catch((err) => {
-          const errorLike = err as { message?: string }
-          setUpdateError(errorLike.message ?? '更新进度读取失败')
+        .catch(() => {
+          // Server may be down during external updater handoff — silently ignore
+          if (updateRun.status === 'handed_off') return
+          setUpdateError('更新进度读取失败，服务可能正在重启。')
         })
-    }, 1200)
+    }, 2000)
     return () => window.clearInterval(timer)
   }, [updateRun])
 
@@ -450,6 +463,12 @@ export default function Settings() {
         outputFormat: imageOutputFormat,
         outputCompression: imageOutputCompression,
       },
+      ocr: {
+        provider: ocrProvider,
+        customBaseUrl: ocrCustomBaseUrl.trim(),
+        customModelId: ocrCustomModelId.trim(),
+        ...(ocrCustomApiKey.trim() ? { customApiKey: ocrCustomApiKey.trim() } : {}),
+      },
       uapis: {
         ...(uapisApiKey.trim() ? { apiKey: uapisApiKey.trim() } : {}),
       },
@@ -464,6 +483,8 @@ export default function Settings() {
         checkpointEnabled,
         seedOnResumeEnabled,
         upgradeDebugEventsEnabled,
+        autoCompactEnabled,
+        autoCompactThreshold,
         morningBrief: {
           enabled: morningBriefEnabled,
           time: morningBriefTime,
@@ -1158,6 +1179,80 @@ export default function Settings() {
               </div>
             </SettingsFoldout>
 
+            <SettingsFoldout title={t('OCR 文字识别', 'OCR Recognition')} {...foldoutLabels}>
+              <div className="settings-row">
+                <div className="settings-row-label">
+                  <div className="settings-row-title">识别方式</div>
+                  <div className="settings-row-desc">
+                    默认使用内置 UAPIs OCR 接口；也可切换为自定义视觉模型（OpenAI-compatible vision endpoint）。
+                  </div>
+                </div>
+                <select
+                  className="settings-input"
+                  value={ocrProvider}
+                  onChange={(event) =>
+                    setOcrProvider(event.target.value as PublicSettings['ocr']['provider'])
+                  }
+                >
+                  <option value="uapis">内置 UAPIs OCR（默认）</option>
+                  <option value="custom-model">自定义视觉模型</option>
+                </select>
+              </div>
+
+              {ocrProvider === 'custom-model' && (
+                <>
+                  <div className="settings-row">
+                    <div className="settings-row-label">
+                      <div className="settings-row-title">Base URL</div>
+                      <div className="settings-row-desc">
+                        OpenAI-compatible API 地址，例如 https://api.openai.com
+                      </div>
+                    </div>
+                    <input
+                      className="settings-input"
+                      value={ocrCustomBaseUrl}
+                      onChange={(event) => setOcrCustomBaseUrl(event.target.value)}
+                      placeholder="https://api.openai.com"
+                    />
+                  </div>
+
+                  <div className="settings-row">
+                    <div className="settings-row-label">
+                      <div className="settings-row-title">Model ID</div>
+                      <div className="settings-row-desc">
+                        支持 vision 的模型 ID，例如 gpt-4o、gpt-4o-mini、gemini-2.0-flash 等。
+                      </div>
+                    </div>
+                    <input
+                      className="settings-input"
+                      value={ocrCustomModelId}
+                      onChange={(event) => setOcrCustomModelId(event.target.value)}
+                      placeholder="gpt-4o-mini"
+                    />
+                  </div>
+
+                  <div className="settings-row">
+                    <div className="settings-row-label">
+                      <div className="settings-row-title">API Key</div>
+                      <div className="settings-row-desc">
+                        {loaded?.ocr.hasCustomApiKey
+                          ? `已配置 (${loaded.ocr.customApiKeyMask})，留空则保持不变`
+                          : '尚未配置'}
+                      </div>
+                    </div>
+                    <input
+                      className="settings-input"
+                      type="password"
+                      value={ocrCustomApiKey}
+                      onChange={(event) => setOcrCustomApiKey(event.target.value)}
+                      placeholder={loaded?.ocr.hasCustomApiKey ? '保持不变' : 'sk-...'}
+                      autoComplete="off"
+                    />
+                  </div>
+                </>
+              )}
+            </SettingsFoldout>
+
             <SettingsFoldout title={t('UAPIs 工具箱', 'UAPIs Toolbox')} {...foldoutLabels}>
 
               <div className="settings-row">
@@ -1366,6 +1461,42 @@ export default function Settings() {
                   <span className="switch-thumb" />
                 </button>
               </div>
+
+              <div className="settings-row">
+                <div className="settings-row-label">
+                  <div className="settings-row-title">自动压缩上下文</div>
+                  <div className="settings-row-desc">
+                    当聊天消息数达到阈值时，自动压缩上下文并保存备份，防止上下文过长导致请求失败。
+                  </div>
+                </div>
+                <button
+                  className={'switch' + (autoCompactEnabled ? ' on' : '')}
+                  type="button"
+                  onClick={() => setAutoCompactEnabled((current) => !current)}
+                >
+                  <span className="switch-thumb" />
+                </button>
+              </div>
+
+              {autoCompactEnabled && (
+                <div className="settings-row">
+                  <div className="settings-row-label">
+                    <div className="settings-row-title">自动压缩阈值</div>
+                    <div className="settings-row-desc">
+                      聊天消息数超过此值时触发自动压缩（最小 20）。
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    min={20}
+                    max={9999}
+                    step={10}
+                    className="settings-input settings-input-number"
+                    value={autoCompactThreshold}
+                    onChange={(e) => setAutoCompactThreshold(Math.max(20, Number(e.target.value) || 100))}
+                  />
+                </div>
+              )}
 
               <div className="settings-row">
                 <div className="settings-row-label">

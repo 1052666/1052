@@ -478,6 +478,8 @@ async function processWechatDesktopMention(mention: WechatDesktopBridgeMention, 
 
   let finalText = ''
   let usage: TokenUsage | undefined
+  const channelAbort = new AbortController()
+  const channelTimeout = setTimeout(() => channelAbort.abort(), 10 * 60_000)
   try {
     const history = await getChatHistory()
     const chatMessages = toChatMessages(history.messages, assistantMessage.id)
@@ -492,6 +494,7 @@ async function processWechatDesktopMention(mention: WechatDesktopBridgeMention, 
     })
     const streamInput: ChatMessage[] = [{ role: 'system', content: systemContext }, ...chatMessages]
     for await (const event of sendMessageStream(streamInput, {
+      abortSignal: channelAbort.signal,
       runtimeContext: {
         source: {
           channel: 'wechat_desktop',
@@ -561,8 +564,8 @@ async function processWechatDesktopMention(mention: WechatDesktopBridgeMention, 
         streaming: false,
         error: true,
         content: current.content
-          ? `${current.content}\n\n微信桌面通道处理失败：${message}`
-          : `微信桌面通道处理失败：${message}`,
+          ? `${current.content}\n\n⚠️ 微信桌面通道出错：${message}`
+          : `⚠️ 微信桌面通道出错：${message}`,
         meta: {
           ...current.meta,
           delivery: {
@@ -576,6 +579,8 @@ async function processWechatDesktopMention(mention: WechatDesktopBridgeMention, 
       'wechat-desktop-agent-error',
     )
     throw error
+  } finally {
+    clearTimeout(channelTimeout)
   }
 }
 

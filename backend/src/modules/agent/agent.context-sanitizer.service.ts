@@ -6,6 +6,9 @@ const REQUEST_FAILURE_PATTERNS = [
   /^Request failed[:：]/i,
   /^生成已中止[。.]?$/i,
   /^已中止[。.]?$/i,
+  /^⚠️\s*已手动停止生成/i,
+  /^⚠️\s*回复生成未完成/i,
+  /^⚠️\s*请求失败/i,
   /LLM\s*流式响应解析失败/i,
   /无法连接\s*LLM/i,
   /Read-only terminal tool only allows/i,
@@ -17,9 +20,11 @@ const CHECKPOINT_FAILURE_PATTERNS = [
   /(?:^|[\s。；;])Request failed[:：]?/i,
   /LLM\s*流式响应解析失败/i,
   /无法连接\s*LLM/i,
-  /(?:工具|请求|调用|连接|生成|响应|解析).{0,24}(?:失败|错误|异常|超时|中止)/i,
-  /(?:request|tool|call|connection|generation|response|stream).{0,32}(?:failed|error|timeout|timed out|aborted)/i,
-  /(?:failed|error|timeout|timed out|aborted).{0,32}(?:request|tool|call|connection|generation|response|stream)/i,
+  /⚠️\s*(?:请求失败|已手动停止|回复生成未完成)/i,
+  /⚠️\s*(?:微信|微信桌面|飞书)通道出错/i,
+  /(?:工具|请求|调用|连接|生成|响应|解析|通道).{0,24}(?:失败|错误|异常|超时|中止|出错)/i,
+  /(?:request|tool|call|connection|generation|response|stream|channel).{0,32}(?:failed|error|timeout|timed out|aborted)/i,
+  /(?:failed|error|timeout|timed out|aborted).{0,32}(?:request|tool|call|connection|generation|response|stream|channel)/i,
 ]
 
 const INTERNAL_DIAGNOSTIC_LINE_PATTERNS = [
@@ -103,7 +108,7 @@ export function toModelChatMessages<T extends ChatMessage & { error?: boolean }>
   const sanitized = history
     .map((message) => sanitizeChatMessageForModel(message))
     .filter((message): message is ChatMessage => message !== null)
-  return sanitized.slice(-Math.max(1, limit))
+  return safeSliceMessages(sanitized, Math.max(1, limit))
 }
 
 /**
@@ -122,6 +127,13 @@ export function safeSliceMessages<T extends { role: string }>(messages: readonly
   // their parent 'assistant' message.
   while (start > 0 && messages[start]!.role === 'tool') {
     start--
+  }
+
+  // If we hit index 0 and it's still a tool message (no parent assistant found
+  // within range), skip forward past the orphaned tool messages to avoid
+  // sending orphan tool_call_ids that cause LLM 400 errors.
+  while (start < messages.length && messages[start]!.role === 'tool') {
+    start++
   }
 
   return messages.slice(start)

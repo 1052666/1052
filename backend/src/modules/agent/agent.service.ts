@@ -1,6 +1,6 @@
 import os from 'node:os'
 import path from 'node:path'
-import { httpError, HttpError } from '../../http-error.js'
+import { HttpError } from '../../http-error.js'
 import {
   formatMorningBriefRuntimeContext,
   getSettings,
@@ -61,7 +61,26 @@ import {
 } from './agent.context-sanitizer.service.js'
 import { maybeCreateInferredMemorySuggestion } from './agent.memory-autosuggest.service.js'
 
-const MAX_TOOL_ROUNDS = 450
+const MAX_TOOL_ROUNDS = Infinity
+const STREAM_IDLE_TIMEOUT_MS = 90_000
+/** Hard wall-clock cap per streaming request – prevents indefinitely running agent loops. */
+const MAX_REQUEST_DURATION_MS = 25 * 60_000
+/**
+ * Proactive conversation-length cap. When the in-request conversation array
+ * exceeds this many messages we trim older tool-call groups before the next
+ * LLM call — preventing context_length_exceeded 400 errors from the provider.
+ */
+const MAX_CONVERSATION_MESSAGES = 120
+/** How many times to retry an LLM call on transient errors (502/504/idle timeout) per round. */
+const MAX_LLM_RETRIES = 2
+
+/** Returns true for errors that are likely transient and worth retrying. */
+function isTransientLlmError(error: unknown): boolean {
+  if (!(error instanceof HttpError)) return false
+  // 502 Bad Gateway, 504 Gateway Timeout, 429 Rate Limit
+  if (error.status === 502 || error.status === 504 || error.status === 429) return true
+  return false
+}
 
 type AgentRunOptions = {
   runtimeContext?: AgentToolRuntimeContext
@@ -232,7 +251,7 @@ async function composeLegacyMessages(
   contextMessageLimit: number,
   morningBriefContext: string,
 ): Promise<LLMConversationMessage[]> {
-  const limitedHistory = history.slice(-Math.max(1, contextMessageLimit))
+  const limitedHistory = safeSliceMessages(history, Math.max(1, contextMessageLimit))
   const latestUserContent = latestUserMessage(limitedHistory)?.content ?? ''
   const callerSystemInstructions = formatSafeCallerSystemInstructions(history)
   const modelHistory = toModelChatMessages(
@@ -409,6 +428,11 @@ async function maybeBuildExtraSections(
 
   sections.push(await formatOutputProfileRuntimeContext(latestUserContent))
 
+  // Always inject skill index so the model knows which Skills exist before
+  // requesting skill-pack. This fixes the issue where the agent never checks
+  // for or uses installed Skills because it didn't know they were available.
+  sections.push(await formatSkillsRuntimeContext())
+
   return sections
 }
 
@@ -498,20 +522,50 @@ async function* runLegacyStream(
   const tools = getAgentToolDefinitions()
   let usage: TokenUsage = {}
   const usedToolNames = new Set<string>()
+  const requestStartedAt = Date.now()
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    const stream = chatCompletionStream(llm, messages, tools, {
-      abortSignal: options.abortSignal,
-      providerCachingEnabled: settings.agent.providerCachingEnabled,
-    })
-    let step = await stream.next()
-
-    while (!step.done) {
-      yield { type: 'delta', content: step.value }
-      step = await stream.next()
+    // ── Wall-clock timeout: graceful finish ────────────────────────
+    if (Date.now() - requestStartedAt > MAX_REQUEST_DURATION_MS) {
+      yield { type: 'delta', content: `\n\n---\n⏱ 处理时间已达 ${MAX_REQUEST_DURATION_MS / 60_000} 分钟上限，已暂停。发送"继续"即可接着处理。` }
+      yield { type: 'usage', usage: withUserTokens(usage, history) }
+      return
+    }
+    // Proactive trimming: keep messages array from growing unbounded.
+    if (messages.length > MAX_CONVERSATION_MESSAGES) {
+      const trimmed = safeSliceMessages(messages, MAX_CONVERSATION_MESSAGES)
+      messages.length = 0
+      messages.push(...trimmed)
     }
 
-    const response = step.value
+    // ── LLM call with auto-retry on transient errors ───────────────
+    let response: LLMAssistantMessage | undefined
+    for (let attempt = 0; attempt <= MAX_LLM_RETRIES; attempt += 1) {
+      try {
+        const stream = chatCompletionStream(llm, messages, tools, {
+          abortSignal: options.abortSignal,
+          providerCachingEnabled: settings.agent.providerCachingEnabled,
+          streamIdleTimeoutMs: STREAM_IDLE_TIMEOUT_MS,
+        })
+        let step = await stream.next()
+
+        while (!step.done) {
+          yield { type: 'delta', content: step.value }
+          step = await stream.next()
+        }
+        response = step.value
+        break
+      } catch (error) {
+        if (attempt < MAX_LLM_RETRIES && isTransientLlmError(error)) {
+          console.warn(`[agent] LLM transient error (attempt ${attempt + 1}/${MAX_LLM_RETRIES + 1}), retrying: ${(error as Error).message}`)
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+          continue
+        }
+        throw error
+      }
+    }
+    if (!response) continue
+
     usage = addUsage(usage, response.usage)
     messages.push(toAssistantHistoryMessage(response))
 
@@ -536,7 +590,9 @@ async function* runLegacyStream(
     messages.push(...toolMessages)
   }
 
-  throw httpError(500, 'Agent 工具调用轮次过多，请重试或调整问题描述。')
+  // Graceful finish instead of error when round limit reached
+  yield { type: 'delta', content: '\n\n---\n⚠ 工具调用轮次已达上限，已暂停。发送"继续"可接着处理。' }
+  yield { type: 'usage', usage: withUserTokens(usage, history) }
 }
 
 async function* runProgressiveStream(
@@ -566,6 +622,7 @@ async function* runProgressiveStream(
   let mountedPacks = checkpoint.mountedPacks
   let usage: TokenUsage = {}
   let upgradeCount = 0
+  const requestStartedAt = Date.now()
 
   appendAgentRuntimeLog({
     stage: 'progressive-start',
@@ -579,6 +636,29 @@ async function* runProgressiveStream(
   })
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+    // ── Wall-clock time guard: graceful finish ─────────────────────
+    if (Date.now() - requestStartedAt > MAX_REQUEST_DURATION_MS) {
+      appendAgentRuntimeLog({
+        stage: 'progressive-time-limit',
+        mode: 'progressive',
+        sessionId,
+        round,
+        mountedPacks,
+        upgradeCount,
+        checkpoint,
+        checkpointEnabled: settings.agent.checkpointEnabled,
+        providerCachingEnabled: settings.agent.providerCachingEnabled,
+        error: `Request exceeded ${MAX_REQUEST_DURATION_MS / 60_000}min wall-clock limit`,
+      })
+      yield { type: 'delta', content: `\n\n---\n⏱ 处理时间已达 ${MAX_REQUEST_DURATION_MS / 60_000} 分钟上限，已暂停。发送"继续"即可接着处理。` }
+      yield { type: 'usage', usage: withUserTokens(usage, history) }
+      return
+    }
+
+    // ── Proactive conversation trimming ────────────────────────────
+    if (conversation.length > MAX_CONVERSATION_MESSAGES) {
+      conversation = safeSliceMessages(conversation, MAX_CONVERSATION_MESSAGES)
+    }
     const built = await buildProgressiveMessages({
       history: conversation,
       mountedPacks,
@@ -620,18 +700,33 @@ async function* runProgressiveStream(
         ? [getContextUpgradeToolDefinition(), ...mountedToolDefinitions]
         : [getContextUpgradeToolDefinition()]
 
-    const stream = chatCompletionStream(llm, built.messages, tools, {
-      abortSignal: options.abortSignal,
-      providerCachingEnabled: settings.agent.providerCachingEnabled,
-    })
-    let step = await stream.next()
+    // ── LLM call with auto-retry on transient errors ───────────────
+    let response: LLMAssistantMessage | undefined
+    for (let attempt = 0; attempt <= MAX_LLM_RETRIES; attempt += 1) {
+      try {
+        const stream = chatCompletionStream(llm, built.messages, tools, {
+          abortSignal: options.abortSignal,
+          providerCachingEnabled: settings.agent.providerCachingEnabled,
+          streamIdleTimeoutMs: STREAM_IDLE_TIMEOUT_MS,
+        })
+        let step = await stream.next()
 
-    while (!step.done) {
-      yield { type: 'delta', content: step.value }
-      step = await stream.next()
+        while (!step.done) {
+          yield { type: 'delta', content: step.value }
+          step = await stream.next()
+        }
+        response = step.value
+        break
+      } catch (error) {
+        if (attempt < MAX_LLM_RETRIES && isTransientLlmError(error)) {
+          console.warn(`[agent] LLM transient error (attempt ${attempt + 1}/${MAX_LLM_RETRIES + 1}), retrying: ${(error as Error).message}`)
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+          continue
+        }
+        throw error
+      }
     }
-
-    const response = step.value
+    if (!response) continue
     const hasUpgradeToolCall = response.toolCalls.some((toolCall) =>
       isContextUpgradeToolCall(toolCall.function.name),
     )
@@ -846,7 +941,9 @@ async function* runProgressiveStream(
     providerCachingEnabled: settings.agent.providerCachingEnabled,
     error: 'Agent tool round limit exceeded',
   })
-  throw httpError(500, 'Agent 工具调用轮次过多，请重试或调整问题描述。')
+  // Graceful finish instead of error
+  yield { type: 'delta', content: '\n\n---\n⚠ 工具调用轮次已达上限，已暂停。发送"继续"可接着处理。' }
+  yield { type: 'usage', usage: withUserTokens(usage, history) }
 }
 
 export async function sendMessage(

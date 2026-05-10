@@ -84,12 +84,21 @@ export type AgentSettings = {
   checkpointEnabled: boolean
   seedOnResumeEnabled: boolean
   upgradeDebugEventsEnabled: boolean
+  autoCompactEnabled: boolean
+  autoCompactThreshold: number
   morningBrief: MorningBriefSettings
 }
 
 export type MorningBriefSettings = {
   enabled: boolean
   time: string
+}
+
+export type OcrSettings = {
+  provider: 'uapis' | 'custom-model'
+  customBaseUrl: string
+  customModelId: string
+  customApiKey: string
 }
 
 export type UapisSettings = {
@@ -99,6 +108,7 @@ export type UapisSettings = {
 export type Settings = {
   llm: LLMSettings
   imageGeneration: ImageGenerationSettings
+  ocr: OcrSettings
   appearance: AppearanceSettings
   agent: AgentSettings
   uapis: UapisSettings
@@ -132,6 +142,13 @@ export type PublicSettings = {
   }
   appearance: AppearanceSettings
   agent: AgentSettings
+  ocr: {
+    provider: OcrSettings['provider']
+    customBaseUrl: string
+    customModelId: string
+    hasCustomApiKey: boolean
+    customApiKeyMask: string
+  }
   uapis: {
     hasApiKey: boolean
     apiKeyMask: string
@@ -146,6 +163,7 @@ export type PublicSettings = {
 export type SettingsPatch = {
   llm?: Partial<LLMSettings>
   imageGeneration?: Partial<ImageGenerationSettings>
+  ocr?: Partial<OcrSettings>
   appearance?: Partial<AppearanceSettings>
   agent?: Partial<Omit<AgentSettings, 'morningBrief'>> & {
     morningBrief?: Partial<MorningBriefSettings>

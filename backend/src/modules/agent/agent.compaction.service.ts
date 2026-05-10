@@ -286,7 +286,7 @@ export async function compactChatHistory(inputMessages?: unknown): Promise<
     },
   ]
 
-  const saved = await saveChatHistory(compacted)
+  const saved = await saveChatHistory(compacted, 'compact')
   return {
     ...saved,
     backupPath,

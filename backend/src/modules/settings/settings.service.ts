@@ -18,6 +18,7 @@ import type {
   LLMTaskKind,
   LLMTaskRoute,
   MorningBriefSettings,
+  OcrSettings,
   PublicLLMProfile,
   Settings,
   PublicSettings,
@@ -65,10 +66,18 @@ const DEFAULT_SETTINGS: Settings = {
     checkpointEnabled: true,
     seedOnResumeEnabled: true,
     upgradeDebugEventsEnabled: true,
+    autoCompactEnabled: true,
+    autoCompactThreshold: 100,
     morningBrief: {
       enabled: false,
       time: '09:30',
     },
+  },
+  ocr: {
+    provider: 'uapis',
+    customBaseUrl: '',
+    customModelId: '',
+    customApiKey: '',
   },
   uapis: {
     apiKey: '',
@@ -343,6 +352,30 @@ function normalizeImageGenerationSettings(
   }
 }
 
+function normalizeOcrSettings(
+  ocr: Partial<OcrSettings> | undefined,
+): OcrSettings {
+  const current = ocr ?? {}
+  return {
+    provider:
+      current.provider === 'uapis' || current.provider === 'custom-model'
+        ? current.provider
+        : DEFAULT_SETTINGS.ocr.provider,
+    customBaseUrl:
+      typeof current.customBaseUrl === 'string'
+        ? current.customBaseUrl
+        : DEFAULT_SETTINGS.ocr.customBaseUrl,
+    customModelId:
+      typeof current.customModelId === 'string' && current.customModelId.trim()
+        ? current.customModelId.trim()
+        : DEFAULT_SETTINGS.ocr.customModelId,
+    customApiKey:
+      typeof current.customApiKey === 'string'
+        ? current.customApiKey
+        : DEFAULT_SETTINGS.ocr.customApiKey,
+  }
+}
+
 function mergeSettings(base: Settings, partial: Partial<Settings>): Settings {
   return {
     llm: normalizeLlmSettings({ ...base.llm, ...(partial.llm ?? {}) }),
@@ -350,6 +383,7 @@ function mergeSettings(base: Settings, partial: Partial<Settings>): Settings {
       ...base.imageGeneration,
       ...(partial.imageGeneration ?? {}),
     },
+    ocr: normalizeOcrSettings({ ...base.ocr, ...(partial.ocr ?? {}) }),
     appearance: { ...base.appearance, ...(partial.appearance ?? {}) },
     agent: { ...base.agent, ...(partial.agent ?? {}) },
     uapis: { ...base.uapis, ...(partial.uapis ?? {}) },
@@ -478,6 +512,21 @@ function normalizeAgentSettings(agent: LegacyAgentSettings | undefined): AgentSe
       'boolean'
         ? Boolean((agent as { upgradeDebugEventsEnabled?: unknown }).upgradeDebugEventsEnabled)
         : DEFAULT_SETTINGS.agent.upgradeDebugEventsEnabled,
+    autoCompactEnabled:
+      typeof (agent as { autoCompactEnabled?: unknown }).autoCompactEnabled === 'boolean'
+        ? Boolean((agent as { autoCompactEnabled?: unknown }).autoCompactEnabled)
+        : DEFAULT_SETTINGS.agent.autoCompactEnabled,
+    autoCompactThreshold:
+      typeof (agent as { autoCompactThreshold?: unknown }).autoCompactThreshold === 'number' &&
+      Number.isFinite((agent as { autoCompactThreshold?: unknown }).autoCompactThreshold)
+        ? Math.min(
+            Math.max(
+              Math.round((agent as { autoCompactThreshold?: number }).autoCompactThreshold ?? 100),
+              20,
+            ),
+            9999,
+          )
+        : DEFAULT_SETTINGS.agent.autoCompactThreshold,
     morningBrief: normalizeMorningBriefSettings(
       (agent as { morningBrief?: unknown }).morningBrief,
       DEFAULT_SETTINGS.agent.morningBrief,
@@ -549,6 +598,13 @@ function toPublic(settings: Settings): PublicSettings {
     },
     appearance: settings.appearance,
     agent: settings.agent,
+    ocr: {
+      provider: settings.ocr.provider,
+      customBaseUrl: settings.ocr.customBaseUrl,
+      customModelId: settings.ocr.customModelId,
+      hasCustomApiKey: settings.ocr.customApiKey.length > 0,
+      customApiKeyMask: maskKey(settings.ocr.customApiKey),
+    },
     uapis: {
       hasApiKey: settings.uapis.apiKey.length > 0,
       apiKeyMask: maskKey(settings.uapis.apiKey),
@@ -726,6 +782,18 @@ export async function updateSettings(patch: SettingsPatch): Promise<PublicSettin
         patch.imageGeneration.apiKey.trim().length > 0
           ? patch.imageGeneration.apiKey.trim()
           : current.imageGeneration.apiKey,
+    },
+    ocr: {
+      ...normalizeOcrSettings({
+        ...current.ocr,
+        ...(patch.ocr ?? {}),
+        customApiKey: current.ocr.customApiKey,
+      }),
+      customApiKey:
+        typeof patch.ocr?.customApiKey === 'string' &&
+        patch.ocr.customApiKey.trim().length > 0
+          ? patch.ocr.customApiKey.trim()
+          : current.ocr.customApiKey,
     },
     appearance: normalizeAppearanceSettings({
       ...current.appearance,
