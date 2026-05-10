@@ -105,6 +105,15 @@ export async function initUpdaterState() {
           run.error = run.message
           run.finishedAt = run.finishedAt ?? new Date().toISOString()
           await fs.writeFile(path.join(RUNS_DIR, file), JSON.stringify(run, null, 2), 'utf-8')
+        } else if (run.status === 'handed_off') {
+          run.status = 'success'
+          run.phase = 'complete'
+          run.phaseLabel = 'Update complete'
+          run.progress = 100
+          run.message = 'The external updater restarted the service, so the handed-off update is complete.'
+          run.error = null
+          run.finishedAt = run.finishedAt ?? new Date().toISOString()
+          await fs.writeFile(path.join(RUNS_DIR, file), JSON.stringify(run, null, 2), 'utf-8')
         }
         runs.set(run.id, run)
       } catch { /* skip corrupt files */ }
@@ -207,9 +216,7 @@ export async function getUpdateStatus(refreshRemote = true): Promise<UpdateStatu
 }
 
 export async function startUpdateInstall(input: UpdateInstallInput = {}): Promise<UpdateRun> {
-  const activeRun = [...runs.values()].find(
-    (run) => run.status === 'queued' || run.status === 'running' || run.status === 'handed_off',
-  )
+  const activeRun = [...runs.values()].find((run) => run.status === 'queued' || run.status === 'running')
   if (activeRun) {
     throw httpError(409, '已有更新任务正在执行，请等待当前任务结束。')
   }
@@ -548,7 +555,12 @@ if ($mode -eq 'archive') {
       }
     }
     Log "[updater] apply $name"
-    Copy-Item -Path $entry.FullName -Destination $target -Recurse -Force
+    if ($entry.PSIsContainer -and ($name -eq 'backend' -or $name -eq 'frontend')) {
+      New-Item -ItemType Directory -Force -Path $target | Out-Null
+      Copy-Item -Path (Join-Path $entry.FullName '*') -Destination $target -Recurse -Force
+    } else {
+      Copy-Item -Path $entry.FullName -Destination $target -Recurse -Force
+    }
   }
 }
 
@@ -667,7 +679,12 @@ if [ "$mode" = "archive" ]; then
       rm -rf "$target"
     fi
     log "[updater] apply $name"
-    cp -a "$entry" "$target"
+    if [ -d "$entry" ] && { [ "$name" = "backend" ] || [ "$name" = "frontend" ]; }; then
+      mkdir -p "$target"
+      cp -a "$entry"/. "$target"/
+    else
+      cp -a "$entry" "$target"
+    fi
   done
 fi
 

@@ -1,5 +1,8 @@
 import express from 'express'
+import fs from 'node:fs/promises'
 import type { AddressInfo } from 'node:net'
+import os from 'node:os'
+import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { UpdateStatus } from '../updates.types.js'
 import { normalizeUpdateInstallInput, planUpdateInstall, shouldRunUpdateInstall } from '../updates.service.js'
@@ -128,6 +131,46 @@ describe('updates service install gate', () => {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()))
       })
+    }
+  })
+
+  it('recovers handed-off runs as terminal success on startup', async () => {
+    vi.resetModules()
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), '1052-updater-'))
+    process.env.DATA_DIR = tempDir
+    const run = {
+      id: 'run-handed-off',
+      status: 'handed_off',
+      phase: 'handoff',
+      phaseLabel: 'handed off',
+      progress: 60,
+      message: 'handed off to external updater',
+      logPath: '',
+      logTail: '',
+      startedAt: '2026-05-10T00:00:00.000Z',
+      finishedAt: '2026-05-10T00:01:00.000Z',
+      error: null,
+      statusSnapshot: null,
+    }
+
+    try {
+      const runsDir = path.join(tempDir, 'updater', 'runs')
+      await fs.mkdir(runsDir, { recursive: true })
+      const runPath = path.join(runsDir, `${run.id}.json`)
+      await fs.writeFile(runPath, JSON.stringify(run, null, 2), 'utf-8')
+
+      const { getUpdateRun, initUpdaterState } = await import('../updates.service.js')
+      await initUpdaterState()
+
+      const recovered = await getUpdateRun(run.id)
+      const stored = JSON.parse(await fs.readFile(runPath, 'utf-8')) as typeof run
+      expect(recovered.status).toBe('success')
+      expect(recovered.phase).toBe('complete')
+      expect(recovered.progress).toBe(100)
+      expect(stored.status).toBe('success')
+    } finally {
+      delete process.env.DATA_DIR
+      await fs.rm(tempDir, { recursive: true, force: true })
     }
   })
 })
