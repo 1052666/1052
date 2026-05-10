@@ -11,6 +11,7 @@ import { config } from '../../config.js'
 import { httpError } from '../../http-error.js'
 import type {
   GitHubCommitResponse,
+  PendingUpdate,
   UpdateCommitInfo,
   UpdateInstallInput,
   UpdateInstallMode,
@@ -30,7 +31,9 @@ const DOWNLOAD_DIR = path.join(UPDATER_DIR, 'downloads')
 const EXTRACT_DIR = path.join(UPDATER_DIR, 'extract')
 const BACKUP_DIR = path.join(config.dataDir, 'update-backups')
 const LOG_DIR = path.join(config.dataDir, 'logs')
+const STAGED_DIR = path.join(UPDATER_DIR, 'staged')
 const STATE_FILE = path.join(UPDATER_DIR, 'state.json')
+const PENDING_FILE = path.join(UPDATER_DIR, 'pending-update.json')
 const INSTALL_BLOCKLIST = new Set([
   '.git',
   '.env',
@@ -80,6 +83,34 @@ type UpdateInstallPreflight =
   | { action: 'install'; latest: UpdateCommitInfo; forcedArchiveReinstallCommit?: string }
 
 const runs = new Map<string, UpdateRun>()
+
+/**
+ * Called once at startup to recover stale runs.
+ * Any persisted run still in 'running' or 'queued' means the previous
+ * process died mid-update — mark them 'failed' so the UI doesn't get stuck.
+ */
+export async function initUpdaterState() {
+  try {
+    const files = await fs.readdir(RUNS_DIR).catch(() => [])
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue
+      try {
+        const raw = await fs.readFile(path.join(RUNS_DIR, file), 'utf-8')
+        const run = JSON.parse(raw) as UpdateRun
+        if (run.status === 'running' || run.status === 'queued') {
+          run.status = 'failed'
+          run.phase = 'failed'
+          run.phaseLabel = '更新中断'
+          run.message = '上次更新在执行过程中因进程退出而中断。'
+          run.error = run.message
+          run.finishedAt = run.finishedAt ?? new Date().toISOString()
+          await fs.writeFile(path.join(RUNS_DIR, file), JSON.stringify(run, null, 2), 'utf-8')
+        }
+        runs.set(run.id, run)
+      } catch { /* skip corrupt files */ }
+    }
+  } catch { /* RUNS_DIR may not exist yet */ }
+}
 
 export function normalizeUpdateInstallInput(input: UpdateInstallInput = {}): UpdateInstallOptions {
   return {
@@ -176,7 +207,9 @@ export async function getUpdateStatus(refreshRemote = true): Promise<UpdateStatu
 }
 
 export async function startUpdateInstall(input: UpdateInstallInput = {}): Promise<UpdateRun> {
-  const activeRun = [...runs.values()].find((run) => run.status === 'queued' || run.status === 'running')
+  const activeRun = [...runs.values()].find(
+    (run) => run.status === 'queued' || run.status === 'running' || run.status === 'handed_off',
+  )
   if (activeRun) {
     throw httpError(409, '已有更新任务正在执行，请等待当前任务结束。')
   }
@@ -258,12 +291,25 @@ async function executeUpdate(run: UpdateRun, options: UpdateInstallOptions) {
       )
     }
 
-    if (status.mode === 'git') {
-      await installWithGit(run, status)
-    } else {
-      await installWithArchive(run, status)
-    }
+    // Stage phase: download and extract to a staging directory (safe — never touches running code)
+    const stagedDir = await stageUpdate(run, status)
 
+    // Write pending-update.json for the external updater script
+    const pending: PendingUpdate = {
+      runId: run.id,
+      mode: status.mode,
+      workspaceRoot: status.workspaceRoot,
+      stagedDir,
+      latest: installPlan.latest,
+      logPath: run.logPath,
+      nodePid: process.pid,
+      createdAt: new Date().toISOString(),
+    }
+    await fs.mkdir(path.dirname(PENDING_FILE), { recursive: true })
+    await fs.writeFile(PENDING_FILE, JSON.stringify(pending, null, 2), 'utf-8')
+    await appendRunLog(run, `[handoff] pending-update.json written${os.EOL}`)
+
+    // Update stored state before handing off
     const state = await readStoredState()
     await writeStoredState({
       ...state,
@@ -273,21 +319,23 @@ async function executeUpdate(run: UpdateRun, options: UpdateInstallOptions) {
       mode: status.mode,
     })
 
+    // Hand off to external updater script (runs detached, survives Node exit)
     await setRun(run, {
-      phase: 'restart',
-      phaseLabel: '重启服务',
-      progress: 98,
-      message: '更新已安装并完成构建，正在安排前后端服务重启。',
+      phase: 'handoff',
+      phaseLabel: '移交外部更新器',
+      progress: 55,
+      message: '正在启动外部更新脚本，Node 进程即将退出，更新将在后台继续。',
     })
-    const restart = await scheduleUpdateRestart()
-    await appendRunLog(run, `[restart] ${restart.message} script=${restart.scriptPath}${os.EOL}`)
+
+    const updaterResult = await launchExternalUpdater(pending)
+    await appendRunLog(run, `[handoff] updater script: ${updaterResult.scriptPath}${os.EOL}`)
 
     await setRun(run, {
-      status: 'success',
-      phase: 'complete',
-      phaseLabel: '安装完成',
-      progress: 100,
-      message: restart.message,
+      status: 'handed_off',
+      phase: 'handoff',
+      phaseLabel: '已移交外部更新器',
+      progress: 60,
+      message: '更新已交由外部脚本执行。脚本将停止当前服务、覆盖文件、安装依赖、构建并重启。请稍后刷新页面。',
       finishedAt: new Date().toISOString(),
     })
   } catch (error) {
@@ -305,7 +353,24 @@ async function executeUpdate(run: UpdateRun, options: UpdateInstallOptions) {
   }
 }
 
-async function installWithGit(run: UpdateRun, status: UpdateStatus) {
+/**
+ * Stage the update: download/fetch + extract into a clean staging directory.
+ * Returns the path to the staged source root.
+ */
+async function stageUpdate(run: UpdateRun, status: UpdateStatus): Promise<string> {
+  if (status.mode === 'git') {
+    return stageWithGit(run, status)
+  }
+  return stageWithArchive(run, status)
+}
+
+/**
+ * Git mode staging: fetch + pull into the workspace, then copy installable
+ * entries into STAGED_DIR so the external updater can apply from there.
+ * The git operations happen in-place (safe — they only update .git and
+ * working tree source files; the running dist/ is blocklisted).
+ */
+async function stageWithGit(run: UpdateRun, status: UpdateStatus): Promise<string> {
   const workspaceRoot = status.workspaceRoot
   await setRun(run, {
     phase: 'fetch',
@@ -315,11 +380,22 @@ async function installWithGit(run: UpdateRun, status: UpdateStatus) {
   })
   await runLogged(run, 'git', ['fetch', 'origin', '--prune'], workspaceRoot, 28)
   await runLogged(run, 'git', ['pull', '--ff-only', 'origin', REPO_BRANCH], workspaceRoot, 45)
-  await installDependenciesAndBuild(run, workspaceRoot)
+
+  // For git mode, the workspace *is* the staged source (git already updated it)
+  await setRun(run, {
+    phase: 'staged',
+    phaseLabel: '代码已就绪',
+    progress: 50,
+    message: 'Git 拉取完成，代码已就绪。',
+  })
+  return workspaceRoot
 }
 
-async function installWithArchive(run: UpdateRun, status: UpdateStatus) {
-  const workspaceRoot = status.workspaceRoot
+/**
+ * Archive mode staging: download zip → extract → find root → stage.
+ * Nothing in the running workspace is modified.
+ */
+async function stageWithArchive(run: UpdateRun, _status: UpdateStatus): Promise<string> {
   const zipPath = path.join(DOWNLOAD_DIR, `${REPO_NAME}-${Date.now()}.zip`)
   const extractTarget = path.join(EXTRACT_DIR, run.id)
 
@@ -345,51 +421,283 @@ async function installWithArchive(run: UpdateRun, status: UpdateStatus) {
   await appendRunLog(run, `[extract] ${zipPath} -> ${extractTarget}${os.EOL}`)
 
   const sourceRoot = await findExtractedRoot(extractTarget)
-  const backupRoot = path.join(BACKUP_DIR, new Date().toISOString().replace(/[:.]/g, '-'))
+
+  // Copy installable entries into a clean staged directory
+  const staged = path.join(STAGED_DIR, run.id)
+  await fs.rm(staged, { recursive: true, force: true })
+  await fs.mkdir(staged, { recursive: true })
+  const names = await listInstallableNames(sourceRoot)
+  for (const name of names) {
+    const src = path.join(sourceRoot, name)
+    const dst = path.join(staged, name)
+    const stats = await fs.stat(src)
+    if (stats.isDirectory()) {
+      await copyRecursive(src, dst)
+    } else if (stats.isFile()) {
+      await fs.mkdir(path.dirname(dst), { recursive: true })
+      await fs.copyFile(src, dst)
+    }
+  }
+  await appendRunLog(run, `[staged] ${names.length} entries staged to ${staged}${os.EOL}`)
 
   await setRun(run, {
-    phase: 'backup',
-    phaseLabel: '备份当前文件',
-    progress: 45,
-    message: '正在备份会被覆盖的项目文件。',
+    phase: 'staged',
+    phaseLabel: '源码已暂存',
+    progress: 50,
+    message: '源码已下载并暂存，准备移交外部更新器。',
   })
-  await backupInstallablePaths(sourceRoot, workspaceRoot, backupRoot, run)
-
-  await setRun(run, {
-    phase: 'apply',
-    phaseLabel: '应用更新',
-    progress: 55,
-    message: '正在覆盖项目源码，运行时 data、日志、密钥和本地约定文件会保留。',
-  })
-  await applyInstallablePaths(sourceRoot, workspaceRoot, run)
-  await installDependenciesAndBuild(run, workspaceRoot)
+  return staged
 }
 
-async function installDependenciesAndBuild(run: UpdateRun, workspaceRoot: string) {
-  const packages = [
-    { name: '后端', dir: path.join(workspaceRoot, 'backend'), installProgress: 66, buildProgress: 82 },
-    { name: '前端', dir: path.join(workspaceRoot, 'frontend'), installProgress: 74, buildProgress: 94 },
-  ]
-  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-
-  for (const pkg of packages) {
-    if (!(await pathExists(path.join(pkg.dir, 'package.json')))) continue
-    await setRun(run, {
-      phase: 'dependencies',
-      phaseLabel: `安装${pkg.name}依赖`,
-      progress: pkg.installProgress,
-      message: `正在安装${pkg.name}依赖。`,
-    })
-    await runLogged(run, npmCommand, ['install', '--no-audit', '--no-fund'], pkg.dir, pkg.installProgress)
-
-    await setRun(run, {
-      phase: 'build',
-      phaseLabel: `构建${pkg.name}`,
-      progress: pkg.buildProgress,
-      message: `正在执行${pkg.name}构建检查。`,
-    })
-    await runLogged(run, npmCommand, ['run', 'build'], pkg.dir, pkg.buildProgress)
+async function copyRecursive(source: string, target: string) {
+  await fs.mkdir(target, { recursive: true })
+  const entries = await fs.readdir(source, { withFileTypes: true })
+  for (const entry of entries) {
+    const src = path.join(source, entry.name)
+    const dst = path.join(target, entry.name)
+    if (entry.isDirectory()) {
+      await copyRecursive(src, dst)
+    } else if (entry.isFile()) {
+      await fs.copyFile(src, dst)
+    }
   }
+}
+
+/**
+ * Launch the external updater script (detached, survives Node exit).
+ * The script reads pending-update.json, stops Node, applies files,
+ * runs npm install + build, and restarts the services.
+ */
+async function launchExternalUpdater(pending: PendingUpdate): Promise<{ scriptPath: string }> {
+  await fs.mkdir(UPDATER_DIR, { recursive: true })
+  await fs.mkdir(LOG_DIR, { recursive: true })
+  if (process.platform === 'win32') {
+    return launchWindowsUpdater(pending)
+  }
+  return launchPosixUpdater(pending)
+}
+
+async function launchWindowsUpdater(pending: PendingUpdate): Promise<{ scriptPath: string }> {
+  const scriptPath = path.join(UPDATER_DIR, `updater-${pending.runId.slice(0, 8)}.ps1`)
+  const logFile = path.join(LOG_DIR, `updater-${pending.runId.slice(0, 8)}.log`)
+  const blocklist = [...INSTALL_BLOCKLIST].map((n) => `'${n}'`).join(',')
+  const preserved = [...PRESERVED_APP_CHILDREN].map((n) => `'${n}'`).join(',')
+  const script = `
+$ErrorActionPreference = 'Stop'
+$pendingFile = '${escapePowerShell(PENDING_FILE)}'
+$logFile = '${escapePowerShell(logFile)}'
+$nodePid = ${pending.nodePid}
+$root = '${escapePowerShell(pending.workspaceRoot)}'
+$staged = '${escapePowerShell(pending.stagedDir)}'
+$mode = '${pending.mode}'
+$blocklist = @(${blocklist})
+$preserved = @(${preserved})
+
+function Log($msg) { Add-Content -Path $logFile -Value "$(Get-Date -Format o) $msg" }
+
+Log "[updater] starting, waiting for Node PID $nodePid to exit"
+
+# Wait for the Node process to exit (max 30s)
+$waited = 0
+while ($waited -lt 30) {
+  try { $p = Get-Process -Id $nodePid -ErrorAction SilentlyContinue } catch { $p = $null }
+  if (-not $p) { break }
+  Start-Sleep -Seconds 1
+  $waited++
+}
+if ($waited -ge 30) {
+  Log "[updater] Node PID $nodePid did not exit in 30s, killing"
+  try { Stop-Process -Id $nodePid -Force -ErrorAction SilentlyContinue } catch {}
+  Start-Sleep -Seconds 2
+}
+
+# Also kill any leftover processes on ports 10052/10053
+$ports = @(10052, 10053)
+$portPids = Get-NetTCPConnection -LocalPort $ports -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+foreach ($pid in $portPids) {
+  if ($pid -and $pid -ne $PID) {
+    Log "[updater] killing port process $pid"
+    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+  }
+}
+Start-Sleep -Milliseconds 500
+
+if ($mode -eq 'archive') {
+  Log "[updater] applying staged files from $staged"
+  # Backup + apply
+  $backupDir = Join-Path '${escapePowerShell(BACKUP_DIR)}' (Get-Date -Format 'yyyy-MM-ddTHH-mm-ss')
+  New-Item -ItemType Directory -Force $backupDir | Out-Null
+
+  $entries = Get-ChildItem -Path $staged -ErrorAction SilentlyContinue
+  foreach ($entry in $entries) {
+    $name = $entry.Name
+    if ($blocklist -contains $name) { continue }
+    $target = Join-Path $root $name
+    # Backup existing
+    if (Test-Path $target) {
+      Log "[updater] backup $target"
+      Copy-Item -Path $target -Destination (Join-Path $backupDir $name) -Recurse -Force
+    }
+    # Apply — for backend/frontend, preserve dist/node_modules/.env*
+    if (Test-Path $target) {
+      if ($name -eq 'backend' -or $name -eq 'frontend') {
+        # Remove files not in preserved list, then copy new
+        Get-ChildItem -Path $target | Where-Object { $preserved -notcontains $_.Name } | Remove-Item -Recurse -Force
+      } else {
+        Remove-Item -Path $target -Recurse -Force
+      }
+    }
+    Log "[updater] apply $name"
+    Copy-Item -Path $entry.FullName -Destination $target -Recurse -Force
+  }
+}
+
+# Install dependencies and build
+Log "[updater] installing dependencies and building"
+$npmCmd = 'npm.cmd'
+$packages = @(
+  @{ Name = 'backend'; Dir = Join-Path $root 'backend' },
+  @{ Name = 'frontend'; Dir = Join-Path $root 'frontend' }
+)
+foreach ($pkg in $packages) {
+  $pkgJson = Join-Path $pkg.Dir 'package.json'
+  if (-not (Test-Path $pkgJson)) { continue }
+  Log "[updater] npm install in $($pkg.Name)"
+  $proc = Start-Process -FilePath $npmCmd -ArgumentList 'install','--no-audit','--no-fund' -WorkingDirectory $pkg.Dir -NoNewWindow -Wait -PassThru -RedirectStandardOutput (Join-Path $logFile "..$($pkg.Name)-install.log") 2>&1
+  if ($proc.ExitCode -ne 0) { Log "[updater] WARNING: npm install for $($pkg.Name) exited $($proc.ExitCode)" }
+  Log "[updater] npm run build in $($pkg.Name)"
+  $proc = Start-Process -FilePath $npmCmd -ArgumentList 'run','build' -WorkingDirectory $pkg.Dir -NoNewWindow -Wait -PassThru -RedirectStandardOutput (Join-Path $logFile "..$($pkg.Name)-build.log") 2>&1
+  if ($proc.ExitCode -ne 0) { Log "[updater] WARNING: npm build for $($pkg.Name) exited $($proc.ExitCode)" }
+}
+
+# Clean up pending file
+Remove-Item -Path $pendingFile -Force -ErrorAction SilentlyContinue
+
+# Restart services
+Log "[updater] restarting services"
+$logDir = '${escapePowerShell(LOG_DIR)}'
+New-Item -ItemType Directory -Force $logDir | Out-Null
+Start-Process -FilePath $npmCmd -ArgumentList 'run','dev' -WorkingDirectory (Join-Path $root 'backend') -WindowStyle Minimized -RedirectStandardOutput (Join-Path $logDir 'backend-dev.out.log') -RedirectStandardError (Join-Path $logDir 'backend-dev.err.log')
+Start-Process -FilePath $npmCmd -ArgumentList 'run','dev' -WorkingDirectory (Join-Path $root 'frontend') -WindowStyle Minimized -RedirectStandardOutput (Join-Path $logDir 'frontend-dev.out.log') -RedirectStandardError (Join-Path $logDir 'frontend-dev.err.log')
+Log "[updater] done"
+`
+  await fs.writeFile(scriptPath, script.trimStart(), 'utf-8')
+  const child = spawn(
+    'powershell.exe',
+    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+    { detached: true, stdio: 'ignore', windowsHide: true },
+  )
+  child.unref()
+  return { scriptPath }
+}
+
+async function launchPosixUpdater(pending: PendingUpdate): Promise<{ scriptPath: string }> {
+  const scriptPath = path.join(UPDATER_DIR, `updater-${pending.runId.slice(0, 8)}.sh`)
+  const logFile = path.join(LOG_DIR, `updater-${pending.runId.slice(0, 8)}.log`)
+  const blocklistItems = [...INSTALL_BLOCKLIST].map((n) => `"${n}"`).join(' ')
+  const preservedItems = [...PRESERVED_APP_CHILDREN].map((n) => `"${n}"`).join(' ')
+  const script = `#!/bin/sh
+set -e
+pendingFile='${escapeSingleQuote(PENDING_FILE)}'
+logFile='${escapeSingleQuote(logFile)}'
+nodePid=${pending.nodePid}
+root='${escapeSingleQuote(pending.workspaceRoot)}'
+staged='${escapeSingleQuote(pending.stagedDir)}'
+mode='${pending.mode}'
+blocklist="${blocklistItems}"
+preserved="${preservedItems}"
+
+log() { echo "$(date -Iseconds) $1" >> "$logFile"; }
+
+log "[updater] starting, waiting for Node PID $nodePid to exit"
+
+# Wait for Node to exit (max 30s)
+waited=0
+while [ $waited -lt 30 ]; do
+  if ! kill -0 $nodePid 2>/dev/null; then break; fi
+  sleep 1
+  waited=$((waited+1))
+done
+if [ $waited -ge 30 ]; then
+  log "[updater] Node PID $nodePid did not exit in 30s, killing"
+  kill -9 $nodePid 2>/dev/null || true
+  sleep 2
+fi
+
+# Kill leftover port listeners
+if command -v lsof >/dev/null 2>&1; then
+  for port in 10052 10053; do
+    pids=$(lsof -tiTCP:$port -sTCP:LISTEN 2>/dev/null || true)
+    if [ -n "$pids" ]; then kill -9 $pids 2>/dev/null || true; fi
+  done
+fi
+
+if [ "$mode" = "archive" ]; then
+  log "[updater] applying staged files from $staged"
+  backupDir='${escapeSingleQuote(BACKUP_DIR)}'"/$(date +%Y-%m-%dT%H-%M-%S)"
+  mkdir -p "$backupDir"
+
+  for entry in "$staged"/*; do
+    [ -e "$entry" ] || continue
+    name=$(basename "$entry")
+    skip=0
+    for bl in $blocklist; do
+      if [ "$name" = "$bl" ]; then skip=1; break; fi
+    done
+    [ $skip -eq 1 ] && continue
+
+    target="$root/$name"
+    # Backup existing
+    if [ -e "$target" ]; then
+      log "[updater] backup $target"
+      cp -a "$target" "$backupDir/$name" 2>/dev/null || true
+    fi
+    # Apply — for backend/frontend, preserve dist/node_modules/.env*
+    if [ -d "$target" ] && { [ "$name" = "backend" ] || [ "$name" = "frontend" ]; }; then
+      for child in "$target"/*; do
+        [ -e "$child" ] || continue
+        childName=$(basename "$child")
+        keep=0
+        for p in $preserved; do
+          if [ "$childName" = "$p" ]; then keep=1; break; fi
+        done
+        [ $keep -eq 0 ] && rm -rf "$child"
+      done
+    elif [ -e "$target" ]; then
+      rm -rf "$target"
+    fi
+    log "[updater] apply $name"
+    cp -a "$entry" "$target"
+  done
+fi
+
+# Install dependencies and build
+log "[updater] installing dependencies and building"
+for pkg in backend frontend; do
+  pkgDir="$root/$pkg"
+  if [ ! -f "$pkgDir/package.json" ]; then continue; fi
+  log "[updater] npm install in $pkg"
+  (cd "$pkgDir" && npm install --no-audit --no-fund >> "$logFile" 2>&1) || log "[updater] WARNING: npm install for $pkg failed"
+  log "[updater] npm run build in $pkg"
+  (cd "$pkgDir" && npm run build >> "$logFile" 2>&1) || log "[updater] WARNING: npm build for $pkg failed"
+done
+
+# Clean up pending file
+rm -f "$pendingFile"
+
+# Restart services
+log "[updater] restarting services"
+logDir='${escapeSingleQuote(LOG_DIR)}'
+mkdir -p "$logDir"
+(cd "$root/backend" && nohup npm run dev > "$logDir/backend-dev.out.log" 2> "$logDir/backend-dev.err.log" &)
+(cd "$root/frontend" && nohup npm run dev > "$logDir/frontend-dev.out.log" 2> "$logDir/frontend-dev.err.log" &)
+log "[updater] done"
+`
+  await fs.writeFile(scriptPath, script, 'utf-8')
+  await fs.chmod(scriptPath, 0o755).catch(() => undefined)
+  const child = spawn('sh', [scriptPath], { detached: true, stdio: 'ignore' })
+  child.unref()
+  return { scriptPath }
 }
 
 async function downloadFile(url: string, target: string, run: UpdateRun) {
@@ -450,81 +758,6 @@ async function downloadFileWithSystemTool(url: string, target: string, run: Upda
     return
   }
   await runLogged(run, 'curl', ['-L', '--fail', '--output', target, url], await resolveWorkspaceRoot(), 34)
-}
-
-async function backupInstallablePaths(
-  sourceRoot: string,
-  workspaceRoot: string,
-  backupRoot: string,
-  run: UpdateRun,
-) {
-  const names = await listInstallableNames(sourceRoot)
-  await fs.mkdir(backupRoot, { recursive: true })
-  for (const name of names) {
-    const target = path.join(workspaceRoot, name)
-    if (!(await pathExists(target))) continue
-    assertInsideRoot(workspaceRoot, target)
-    await copyBackupEntry(target, path.join(backupRoot, name))
-    await appendRunLog(run, `[backup] ${target} -> ${path.join(backupRoot, name)}${os.EOL}`)
-  }
-}
-
-async function applyInstallablePaths(sourceRoot: string, workspaceRoot: string, run: UpdateRun) {
-  const names = await listInstallableNames(sourceRoot)
-  for (const name of names) {
-    const source = path.join(sourceRoot, name)
-    const target = path.join(workspaceRoot, name)
-    assertInsideRoot(workspaceRoot, target)
-    const stats = await fs.stat(source)
-    if (stats.isDirectory()) {
-      const preserve = name === 'backend' || name === 'frontend' ? PRESERVED_APP_CHILDREN : new Set<string>()
-      await syncDirectory(source, target, preserve)
-    } else if (stats.isFile()) {
-      await fs.mkdir(path.dirname(target), { recursive: true })
-      await fs.copyFile(source, target)
-    }
-    await appendRunLog(run, `[apply] ${source} -> ${target}${os.EOL}`)
-  }
-}
-
-async function copyBackupEntry(source: string, target: string) {
-  const stats = await fs.stat(source)
-  if (stats.isDirectory()) {
-    await fs.mkdir(target, { recursive: true })
-    const entries = await fs.readdir(source, { withFileTypes: true })
-    for (const entry of entries) {
-      if (PRESERVED_APP_CHILDREN.has(entry.name)) continue
-      await copyBackupEntry(path.join(source, entry.name), path.join(target, entry.name))
-    }
-    return
-  }
-  if (stats.isFile()) {
-    await fs.mkdir(path.dirname(target), { recursive: true })
-    await fs.copyFile(source, target)
-  }
-}
-
-async function syncDirectory(source: string, target: string, preserve: Set<string>) {
-  await fs.mkdir(target, { recursive: true })
-  const sourceEntries = await fs.readdir(source, { withFileTypes: true })
-  const sourceNames = new Set(sourceEntries.map((entry) => entry.name))
-  const targetEntries = await fs.readdir(target, { withFileTypes: true }).catch(() => [])
-
-  for (const entry of targetEntries) {
-    if (preserve.has(entry.name) || sourceNames.has(entry.name)) continue
-    await fs.rm(path.join(target, entry.name), { recursive: true, force: true })
-  }
-
-  for (const entry of sourceEntries) {
-    const sourcePath = path.join(source, entry.name)
-    const targetPath = path.join(target, entry.name)
-    if (entry.isDirectory()) {
-      await syncDirectory(sourcePath, targetPath, new Set())
-    } else if (entry.isFile()) {
-      await fs.mkdir(path.dirname(targetPath), { recursive: true })
-      await fs.copyFile(sourcePath, targetPath)
-    }
-  }
 }
 
 async function listInstallableNames(sourceRoot: string): Promise<string[]> {
@@ -638,15 +871,6 @@ async function resolveWorkspaceRoot(): Promise<string> {
     return grandParent
   }
   return cwd
-}
-
-function assertInsideRoot(root: string, target: string) {
-  const resolvedRoot = path.resolve(root)
-  const resolvedTarget = path.resolve(target)
-  const relative = path.relative(resolvedRoot, resolvedTarget)
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error(`更新目标越过项目根目录：${resolvedTarget}`)
-  }
 }
 
 async function runLogged(
@@ -764,11 +988,13 @@ function formatBytes(value: number): string {
 
 async function scheduleWindowsRestart(workspaceRoot: string): Promise<UpdateRestartResponse> {
   const scriptPath = path.join(UPDATER_DIR, `restart-${Date.now()}.ps1`)
+  const nodePid = process.pid
   const script = `
 $ErrorActionPreference = 'SilentlyContinue'
 Start-Sleep -Milliseconds 900
 $root = '${escapePowerShell(workspaceRoot)}'
 $logDir = '${escapePowerShell(LOG_DIR)}'
+$callerNodePid = ${nodePid}
 New-Item -ItemType Directory -Force $logDir | Out-Null
 $ports = @(10052, 10053)
 $portPids = Get-NetTCPConnection -LocalPort $ports -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
@@ -782,7 +1008,7 @@ $projectProcesses = Get-CimInstance Win32_Process | Where-Object {
   $_.CommandLine -match '(npm|vite|tsx|node)'
 }
 foreach ($proc in $projectProcesses) {
-  if ($proc.ProcessId -and $proc.ProcessId -ne $PID) { Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue }
+  if ($proc.ProcessId -and $proc.ProcessId -ne $PID -and $proc.ProcessId -ne $callerNodePid) { Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 Start-Sleep -Milliseconds 600
 Start-Process -FilePath npm.cmd -ArgumentList 'run','dev' -WorkingDirectory (Join-Path $root 'backend') -WindowStyle Minimized -RedirectStandardOutput (Join-Path $logDir 'backend-dev.out.log') -RedirectStandardError (Join-Path $logDir 'backend-dev.err.log')

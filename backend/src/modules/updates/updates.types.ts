@@ -1,11 +1,13 @@
 export type UpdateInstallMode = 'git' | 'archive'
 
-export type UpdateRunStatus = 'queued' | 'running' | 'success' | 'failed'
+export type UpdateRunStatus = 'queued' | 'running' | 'handed_off' | 'success' | 'failed'
 
 export type UpdatePhase =
   | 'queued'
   | 'preflight'
   | 'fetch'
+  | 'staged'
+  | 'handoff'
   | 'backup'
   | 'apply'
   | 'dependencies'
@@ -68,6 +70,17 @@ export type UpdateRestartResponse = {
   scheduled: boolean
   message: string
   scriptPath: string
+}
+
+export type PendingUpdate = {
+  runId: string
+  mode: UpdateInstallMode
+  workspaceRoot: string
+  stagedDir: string
+  latest: UpdateCommitInfo
+  logPath: string
+  nodePid: number
+  createdAt: string
 }
 
 export type GitHubCommitResponse = {

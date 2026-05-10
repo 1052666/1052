@@ -2,12 +2,14 @@ import { api } from './client'
 
 export type UpdateInstallMode = 'git' | 'archive'
 
-export type UpdateRunStatus = 'queued' | 'running' | 'success' | 'failed'
+export type UpdateRunStatus = 'queued' | 'running' | 'handed_off' | 'success' | 'failed'
 
 export type UpdatePhase =
   | 'queued'
   | 'preflight'
   | 'fetch'
+  | 'staged'
+  | 'handoff'
   | 'backup'
   | 'apply'
   | 'dependencies'

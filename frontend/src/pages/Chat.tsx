@@ -101,7 +101,7 @@ const EMPTY_CHAT_PROMPTS = [
 
 const CHAT_HISTORY_CACHE_KEY = '1052os.chat-history-cache'
 const EMPTY_HISTORY_RETRY_MS = 240
-const INTERRUPTED_MESSAGE_PLACEHOLDER = '生成已中止。'
+const INTERRUPTED_MESSAGE_PLACEHOLDER = '⚠️ 回复生成未完成，可能是连接中断或手动停止。'
 const LEGACY_INTERRUPTED_MESSAGE_PLACEHOLDER = '已中止。'
 
 function normalizeInterruptedMessageContent(content: string) {
@@ -346,7 +346,7 @@ class MessageRenderBoundary extends Component<
     if (this.state.failed) {
       return (
         <div className="msg-content msg-error">
-          这条消息渲染失败，请刷新或重新生成。
+          ⚠️ 消息渲染异常，请刷新页面或重新发送。
         </div>
       )
     }
@@ -546,7 +546,11 @@ export default function Chat() {
         if (age < 60_000) continue
         message.streaming = false
         message.error = true
-        if (!message.content) message.content = INTERRUPTED_MESSAGE_PLACEHOLDER
+        if (!message.content) {
+          message.content = INTERRUPTED_MESSAGE_PLACEHOLDER
+        } else {
+          message.content = message.content + '\n\n' + INTERRUPTED_MESSAGE_PLACEHOLDER
+        }
         needsPatch = true
       }
     }
@@ -619,12 +623,15 @@ export default function Chat() {
     setToolCalls([])
     const streaming = messagesRef.current.find((message) => message.streaming)
     if (streaming) {
+      const existing = streaming.content || ''
       patchMsg(
         streaming.id,
         {
           streaming: false,
           error: true,
-          content: streaming.content || '生成已中止。',
+          content: existing
+            ? existing + '\n\n⚠️ 已手动停止生成。'
+            : '⚠️ 已手动停止生成。',
         },
         true,
       )
@@ -736,7 +743,7 @@ export default function Chat() {
           ts: now,
           streaming: false,
           error: true,
-          content: '上下文压缩失败：' + ((e as Error).message || '未知错误'),
+          content: '⚠️ 上下文压缩出错：' + ((e as Error).message || '未知错误') + '\n\n可以重新发送消息重试。',
         },
       ]
       commitMessages(next)
@@ -1064,18 +1071,33 @@ export default function Chat() {
               // Keep tool call panel visible briefly so user can see final results,
               // then clear it after 3 seconds.
               setTimeout(() => setToolCalls([]), 3000)
-              patchMsg(assistantId, { streaming: false }, true)
+              const current = messagesRef.current.find((m) => m.id === assistantId)
+              const finalContent = current?.content || ''
+              // If content is empty after streaming (e.g. model returned only
+              // tool calls without text), keep it as-is — the image markdown
+              // will have been appended via delta. Do not overwrite with a
+              // placeholder.
+              patchMsg(assistantId, { streaming: false, content: finalContent }, true)
             },
-            onError: (message) =>
+            onError: (message) => {
+              // Append error to existing content instead of replacing it, so
+              // that thinking blocks, partial text, and image markdown are not
+              // destroyed by the error message.
+              const current = messagesRef.current.find((m) => m.id === assistantId)
+              const existingContent = current?.content || ''
+              const errorSuffix = '\n\n⚠️ 请求失败: ' + message
               patchMsg(
                 assistantId,
                 {
                   streaming: false,
                   error: true,
-                  content: '请求失败: ' + message,
+                  content: existingContent
+                    ? existingContent + errorSuffix
+                    : '请求失败: ' + message,
                 },
                 true,
-              ),
+              )
+            },
           },
           controller.signal,
         )
@@ -1095,12 +1117,18 @@ export default function Chat() {
       }
     } catch (e) {
       const err = e as { message?: string }
+      const current = messagesRef.current.find((m) => m.id === assistantId)
+      const existingContent = current?.content || ''
+      const errorMsg = err.message ?? '未知错误'
+      const errorSuffix = '\n\n⚠️ 请求失败: ' + errorMsg
       patchMsg(
         assistantId,
         {
           streaming: false,
           error: true,
-          content: '请求失败: ' + (err.message ?? '未知错误'),
+          content: existingContent
+            ? existingContent + errorSuffix
+            : '请求失败: ' + errorMsg,
         },
         true,
       )

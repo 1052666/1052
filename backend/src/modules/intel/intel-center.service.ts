@@ -84,6 +84,7 @@ export async function collectIntelCenterData(input: {
         INTEL_CENTER_SOURCE_REGISTRY: '1',
         INTEL_CENTER_TOTAL_BUDGET_SECONDS: collectorBudgetSeconds(timeoutMs),
         NO_COLOR: '1',
+        PYTHONIOENCODING: 'utf-8',
         PYTHONUNBUFFERED: '1',
         TERM: 'dumb',
       },

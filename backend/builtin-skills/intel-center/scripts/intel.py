@@ -812,7 +812,7 @@ def collect_china_market() -> dict:
         completed = subprocess.run(
             [sys.executable, "-c", CHINA_MARKET_CHILD],
             capture_output=True,
-            env={**os.environ, "FORCE_COLOR": "0", "NO_COLOR": "1", "TERM": "dumb"},
+            env={**os.environ, "FORCE_COLOR": "0", "NO_COLOR": "1", "PYTHONIOENCODING": "utf-8", "TERM": "dumb"},
             text=True,
             timeout=timeout,
         )

@@ -38,10 +38,19 @@ export type PublicSettings = {
     checkpointEnabled: boolean
     seedOnResumeEnabled: boolean
     upgradeDebugEventsEnabled: boolean
+    autoCompactEnabled: boolean
+    autoCompactThreshold: number
     morningBrief: {
       enabled: boolean
       time: string
     }
+  }
+  ocr: {
+    provider: 'uapis' | 'custom-model'
+    customBaseUrl: string
+    customModelId: string
+    hasCustomApiKey: boolean
+    customApiKeyMask: string
   }
   uapis: {
     hasApiKey: boolean
@@ -110,6 +119,12 @@ export type SettingsPatch = {
   }>
   appearance?: Partial<PublicSettings['appearance']>
   agent?: Partial<PublicSettings['agent']>
+  ocr?: Partial<{
+    provider: PublicSettings['ocr']['provider']
+    customBaseUrl: string
+    customModelId: string
+    customApiKey: string
+  }>
   uapis?: Partial<{ apiKey: string }>
 }
 

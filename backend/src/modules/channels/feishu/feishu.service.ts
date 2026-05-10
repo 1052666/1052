@@ -992,6 +992,8 @@ async function handleInboundFeishuMessage(event: any) {
   let usage: TokenUsage | undefined
   let streamCardMessageId: string | undefined
   let streamCardFailed = false
+  const channelAbort = new AbortController()
+  const channelTimeout = setTimeout(() => channelAbort.abort(), 10 * 60_000)
   let lastStreamCardText = ''
   let lastStreamCardUpdateAt = 0
 
@@ -1017,6 +1019,7 @@ async function handleInboundFeishuMessage(event: any) {
     const history = await getChatHistory()
     const chatMessages = toChatMessages(history.messages, assistantMessage.id)
     for await (const streamEvent of sendMessageStream(chatMessages, {
+      abortSignal: channelAbort.signal,
       runtimeContext: runtimeContextForFeishu({
         chatId,
         chatType,
@@ -1156,8 +1159,8 @@ async function handleInboundFeishuMessage(event: any) {
           config,
           messageId: streamCardMessageId,
           card: buildFeishuStreamingCard({
-            title: '1052 OS 处理失败',
-            content: trimCardText(finalText || '当前回复未能完整生成。', FEISHU_STREAM_CARD_TEXT_LIMIT),
+            title: '1052 OS ⚠️ 出错',
+            content: trimCardText(finalText || '当前回复未能完整生成，请重试。', FEISHU_STREAM_CARD_TEXT_LIMIT),
             status: 'failed',
             note: messageText,
           }),
@@ -1172,7 +1175,9 @@ async function handleInboundFeishuMessage(event: any) {
         ...current,
         streaming: false,
         error: true,
-        content: current.content || `Feishu channel failed: ${messageText}`,
+        content: current.content
+          ? `${current.content}\n\n⚠️ 飞书通道出错：${messageText}`
+          : `⚠️ 飞书通道出错：${messageText}`,
         meta: {
           ...current.meta,
           delivery: {
@@ -1186,6 +1191,8 @@ async function handleInboundFeishuMessage(event: any) {
       'feishu-agent-error',
     )
     throw error
+  } finally {
+    clearTimeout(channelTimeout)
   }
 }
 
