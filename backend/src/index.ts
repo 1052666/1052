@@ -4,6 +4,7 @@ import { startScheduledTaskRunner } from './modules/calendar/calendar.schedule.s
 import { ensureAgentWorkspace } from './modules/agent/agent.workspace.service.js'
 import { startAllEnabledWechatAccounts } from './modules/channels/wechat/wechat.service.js'
 import { startAllEnabledFeishuChannels } from './modules/channels/feishu/feishu.service.js'
+import { initMemoryStorage } from './modules/memory/memory.service.js'
 import { ensureBundledSkillsInstalled } from './modules/skills/skills.service.js'
 import { initUpdaterState } from './modules/updates/updates.service.js'
 import { installBackendRuntimeLogging } from './runtime-logs.js'
@@ -13,6 +14,7 @@ const app = createApp()
 
 async function bootstrap() {
   await initUpdaterState()
+  await initMemoryStorage()
   const agentWorkspace = await ensureAgentWorkspace()
   const bundledSkills = await ensureBundledSkillsInstalled()
 
