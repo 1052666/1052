@@ -1,10 +1,12 @@
-import { useEffect, useRef, lazy, Suspense, type ReactNode } from 'react'
+import { useEffect, useRef, useState, lazy, Suspense, type ReactNode } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { MirrorSidebar } from './MirrorSidebar'
 import { MirrorPageWrapper } from './MirrorPageWrapper'
 import { MirrorPageHeader } from './MirrorPageHeader'
 import { attachCursorTracking } from './cursorTracking'
 import { CouplingController, CouplingContext } from './cardCoupling'
+import { shouldShowPour, markPourSeen } from './liquidPour'
+import { LiquidPourOverlay } from './LiquidPourOverlay'
 
 // Lazy mirror pages — PR2/PR3 fill the stubs.
 const MirrorChat = lazy(() =>
@@ -51,6 +53,10 @@ export function MirrorChrome() {
   // Lazy-init once so the controller identity stays stable across renders.
   const couplingRef = useRef<CouplingController | null>(null)
   if (couplingRef.current == null) couplingRef.current = new CouplingController()
+
+  // IU-16: Liquid pour on first mirror activation per session. Checked
+  // once at mount — gate handles reduced-motion + private-mode internally.
+  const [pouring, setPouring] = useState<boolean>(() => shouldShowPour())
 
   useEffect(() => attachCursorTracking(), [])
 
@@ -109,6 +115,14 @@ export function MirrorChrome() {
 
   return (
     <CouplingContext.Provider value={couplingRef.current}>
+    {pouring && (
+      <LiquidPourOverlay
+        onDone={() => {
+          markPourSeen()
+          setPouring(false)
+        }}
+      />
+    )}
     <div className="mr-shell">
       <MirrorSidebar />
       <Suspense fallback={<div className="mr-page-loading" />}>
