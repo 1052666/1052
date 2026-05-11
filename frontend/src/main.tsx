@@ -9,6 +9,7 @@ import './sql-workbench.css'
 // Mirror profile material layer — must load AFTER styles.css so its
 // [data-base-profile=mirror] rules cascade-override the base palette.
 import './mirror-theme.css'
+import './mirror/mirror-extras.css'
 
 installFrontendRuntimeLogging()
 

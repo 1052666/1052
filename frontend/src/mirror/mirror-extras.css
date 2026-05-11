@@ -1,0 +1,106 @@
+/* mirror-extras.css — Phase 1 tokens layered on top of mirror-theme.css
+   Loaded only when [data-base-profile='mirror'] is on the html root. */
+
+[data-base-profile='mirror'] {
+  /* Spatial grid — only these values allowed for padding/margin/gap */
+  --mr-g1: 4px;
+  --mr-g2: 8px;
+  --mr-g3: 12px;
+  --mr-g4: 16px;
+  --mr-g5: 20px;
+  --mr-g6: 24px;
+  --mr-g7: 28px;
+
+  /* Padding tiers per card type */
+  --mr-pad-stat: 20px 24px 24px 24px; /* top -4px to compensate big-number baseline */
+  --mr-pad-form: 28px;
+  --mr-pad-tight: 20px;
+
+  /* Radius — override v1 mirror-theme values */
+  --mr-radius-card: 20px;
+  --mr-radius-panel: 24px;
+  --mr-radius-control: 12px;
+  --mr-radius-chip: 9999px;
+
+  /* Hairline tiers — IU review lesson: 0.5px subpixel for row dividers */
+  --mr-hair-faint: 0.5px solid rgba(255, 255, 255, 0.025);
+  --mr-hair: 1px solid rgba(255, 255, 255, 0.05);
+  --mr-hair-strong: 1px solid rgba(255, 255, 255, 0.10);
+
+  /* Number font features — must be on every digit display */
+  --mr-num-features: 'tnum' 1, 'cv11' 1, 'ss01' 1;
+}
+
+[data-base-profile='mirror'][data-theme='light'] {
+  --mr-hair-faint: 0.5px solid rgba(0, 0, 0, 0.04);
+  --mr-hair: 1px solid rgba(0, 0, 0, 0.06);
+  --mr-hair-strong: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+/* Typography utilities — applied per role */
+[data-base-profile='mirror'] .mr-text-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  opacity: 0.78;
+}
+[data-base-profile='mirror'] .mr-text-body {
+  font-size: 13px;
+  font-weight: 420;
+  letter-spacing: 0;
+  color: var(--fg-2);
+}
+[data-base-profile='mirror'] .mr-text-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--fg-2);
+}
+[data-base-profile='mirror'] .mr-text-meta {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--fg-4);
+}
+[data-base-profile='mirror'] .mr-text-big-number {
+  font-size: clamp(34px, 2.4vw, 42px);
+  font-weight: 250;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--mr-num-features);
+}
+
+/* MirrorCard base */
+[data-base-profile='mirror'] .mr-card {
+  background: var(--mr-surface);
+  backdrop-filter: var(--mr-backdrop);
+  -webkit-backdrop-filter: var(--mr-backdrop);
+  border: var(--mr-hair);
+  border-radius: var(--mr-radius-card);
+  box-shadow: var(--mr-inset-top), var(--mr-inset-bottom), var(--mr-elevation);
+  transition: var(--mr-transition);
+  position: relative;
+  isolation: isolate;
+}
+[data-base-profile='mirror'] .mr-card-pad-stat  { padding: var(--mr-pad-stat); }
+[data-base-profile='mirror'] .mr-card-pad-form  { padding: var(--mr-pad-form); }
+[data-base-profile='mirror'] .mr-card-pad-tight { padding: var(--mr-pad-tight); }
+
+/* Hover physics tiers */
+[data-base-profile='mirror'] .mr-card-int-none:hover { /* no-op */ }
+[data-base-profile='mirror'] .mr-card-int-highlight:hover {
+  /* specular boost — driven by --mr-hover-boost var read in mirror-theme.css ::after */
+  --mr-hover-boost: 0.14;
+}
+[data-base-profile='mirror'] .mr-card-int-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--mr-inset-top), var(--mr-inset-bottom), 0 14px 32px rgba(0, 0, 0, 0.24);
+}
+[data-base-profile='mirror'] .mr-card-int-lift:active {
+  transform: translateY(0);
+  transition-duration: 120ms;
+  box-shadow: var(--mr-inset-top), var(--mr-inset-bottom), 0 4px 12px rgba(0, 0, 0, 0.32);
+}
