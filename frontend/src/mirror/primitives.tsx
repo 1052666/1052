@@ -169,7 +169,7 @@ MirrorInput.displayName = 'MirrorInput'
 // MirrorPresetCard
 export interface MirrorPresetCardProps {
   name: string
-  url: string
+  url?: string
   modelId?: string
   onClick?: () => void
   selected?: boolean

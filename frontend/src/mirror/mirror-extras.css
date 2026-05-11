@@ -92,7 +92,8 @@
 /* Hover physics tiers */
 [data-base-profile='mirror'] .mr-card-int-none:hover { /* no-op */ }
 [data-base-profile='mirror'] .mr-card-int-highlight:hover {
-  /* specular boost — driven by --mr-hover-boost var read in mirror-theme.css ::after */
+  /* Forward contract: IU-7 will read --mr-hover-boost in mirror-theme.css ::after
+     to brighten specular alpha on hover. Currently no visual effect beyond transition. */
   --mr-hover-boost: 0.14;
 }
 [data-base-profile='mirror'] .mr-card-int-lift:hover {
@@ -134,6 +135,10 @@
 [data-base-profile='mirror'] .mr-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+[data-base-profile='mirror'] .mr-button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.30);
+  outline-offset: 2px;
 }
 [data-base-profile='mirror'] .mr-button-subtle {
   background: transparent;
@@ -192,6 +197,11 @@
   transition: color 200ms;
 }
 [data-base-profile='mirror'] .mr-collapsible-toggle:hover { color: var(--fg-2); }
+[data-base-profile='mirror'] .mr-collapsible-toggle:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.30);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 
 /* MirrorProgressBar */
 [data-base-profile='mirror'] .mr-progress-row {
