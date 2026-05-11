@@ -285,7 +285,7 @@ describe('useChatModel', () => {
     })
 
     expect(result.current.loading).toBe(false)
-    const last = result.current.messages.at(-1)
+    const last = result.current.messages[result.current.messages.length - 1]
     expect(last?.error).toBe(true)
     expect(last?.streaming).toBeFalsy()
     expect(last?.content).toContain('已手动停止')
