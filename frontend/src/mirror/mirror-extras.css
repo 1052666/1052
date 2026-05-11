@@ -391,3 +391,55 @@
   flex-direction: column;
   gap: 2px;
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   MirrorPageHeader + MirrorPageWrapper (IU-7 Task 16)
+   ───────────────────────────────────────────────────────────────────── */
+[data-base-profile='mirror'] .mr-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+[data-base-profile='mirror'] .mr-page-header {
+  padding: var(--mr-g7) var(--mr-g7) var(--mr-g6);
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: var(--mr-g6);
+}
+[data-base-profile='mirror'] .mr-page-header-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+[data-base-profile='mirror'] .mr-page-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--fg-1);
+}
+[data-base-profile='mirror'] .mr-page-subtitle {
+  margin: var(--mr-g2) 0 0;
+  color: var(--fg-3);
+}
+[data-base-profile='mirror'] .mr-page-actions {
+  display: flex;
+  gap: var(--mr-g3);
+  flex-shrink: 0;
+}
+[data-base-profile='mirror'] .mr-page-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 var(--mr-g7) var(--mr-g7);
+}
+
+/* Shell layout — root wrapper for the mirror profile */
+[data-base-profile='mirror'] .mr-shell {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
