@@ -521,3 +521,82 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   IU-10: LLM 接入 sub-sections + preset grid + task routing
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Preset cards — 2-col nested grid inside LLM card body */
+[data-base-profile='mirror'] .mr-preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--mr-g3);
+}
+
+/* Sub-section spacing — pure whitespace dividers, no hairlines */
+[data-base-profile='mirror'] .mr-settings-sub {
+  padding-top: var(--mr-g6);
+}
+[data-base-profile='mirror'] .mr-settings-sub:first-child {
+  padding-top: 0;
+}
+[data-base-profile='mirror'] .mr-settings-sub > h4.mr-text-title {
+  margin: 0;
+}
+[data-base-profile='mirror'] .mr-settings-sub-desc {
+  margin: var(--mr-g2) 0 var(--mr-g4);
+  color: var(--fg-4);
+  line-height: 1.5;
+}
+[data-base-profile='mirror'] .mr-settings-sub-stub {
+  margin: var(--mr-g3) 0 0;
+  color: var(--fg-4);
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* Labeled input fields stacked vertically */
+[data-base-profile='mirror'] .mr-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-g2);
+  margin-top: var(--mr-g4);
+}
+[data-base-profile='mirror'] .mr-settings-sub > h4.mr-text-title + .mr-settings-field {
+  margin-top: var(--mr-g4);
+}
+
+/* Profile chip row — wraps when many profiles present */
+[data-base-profile='mirror'] .mr-profile-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mr-g2);
+  margin-top: var(--mr-g3);
+}
+
+/* Task routing — label/description left, select right */
+[data-base-profile='mirror'] .mr-task-route-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-g3);
+}
+[data-base-profile='mirror'] .mr-task-route-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mr-g4);
+}
+[data-base-profile='mirror'] .mr-task-route-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+[data-base-profile='mirror'] .mr-task-route-select {
+  min-width: 180px;
+  max-width: 240px;
+  flex-shrink: 0;
+  /* mr-input height + radius inherited; ensure native select arrow stays visible */
+  padding-right: var(--mr-g3);
+}
