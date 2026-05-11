@@ -254,10 +254,14 @@ describe('useChatModel', () => {
     const api = await getAgentApi()
     api.getHistory.mockResolvedValueOnce({ messages: [] })
     api.saveHistory.mockResolvedValue({ messages: [] })
+    // Match production behavior in api/agent.ts:350 — AbortError is swallowed
+    // and chatStream resolves normally rather than rejecting. The hook's
+    // catch-block must NOT run; only stop()'s own patchMsg should mark the
+    // message as error / "已手动停止".
     api.chatStream.mockImplementation((_history, _handlers, signal) => {
-      return new Promise<void>((_resolve, reject) => {
+      return new Promise<void>((resolve) => {
         ;(signal as AbortSignal).addEventListener('abort', () => {
-          reject(new DOMException('aborted', 'AbortError'))
+          resolve()
         })
       })
     })
@@ -280,7 +284,6 @@ describe('useChatModel', () => {
     })
 
     await act(async () => {
-      // send() rejects internally and is caught by the error branch.
       await sendPromise
     })
 
@@ -289,6 +292,9 @@ describe('useChatModel', () => {
     expect(last?.error).toBe(true)
     expect(last?.streaming).toBeFalsy()
     expect(last?.content).toContain('已手动停止')
+    // Catch branch must not have appended a "请求失败" line — that would mean
+    // the test was masking a real prod-vs-mock divergence.
+    expect(last?.content).not.toContain('请求失败')
   })
 
   it('addUpload via handleUploadSelection / removePendingUpload manages list', async () => {

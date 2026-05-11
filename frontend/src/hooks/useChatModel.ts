@@ -4,9 +4,9 @@ import {
   type AgentUploadItem,
   type ChatMessage,
   type StoredChatMessage,
+  type ToolCallEntry,
 } from '../api/agent'
 import { SettingsApi } from '../api/settings'
-import type { ToolCallEntry } from '../components/ToolCallPanel'
 
 // Public shape of a chat message as seen by the page.
 // Mirrors StoredChatMessage + a transient `streaming` flag.
@@ -16,13 +16,43 @@ export const CHAT_HISTORY_CACHE_KEY = '1052os.chat-history-cache'
 const EMPTY_HISTORY_RETRY_MS = 240
 export const INTERRUPTED_MESSAGE_PLACEHOLDER =
   '⚠️ 回复生成未完成，可能是连接中断或手动停止。'
-export const LEGACY_INTERRUPTED_MESSAGE_PLACEHOLDER = '已中止。'
+const LEGACY_INTERRUPTED_MESSAGE_PLACEHOLDER = '已中止。'
 
 export function normalizeInterruptedMessageContent(content: string): string {
   return content.startsWith(LEGACY_INTERRUPTED_MESSAGE_PLACEHOLDER)
     ? INTERRUPTED_MESSAGE_PLACEHOLDER +
         content.slice(LEGACY_INTERRUPTED_MESSAGE_PLACEHOLDER.length)
     : content
+}
+
+// Module-level helper: close over module-private constants only, so it is
+// stable and doesn't need useCallback at the call site.
+function normalizeRestoredMessages(
+  storedMessages: StoredChatMessage[],
+  now: number = Date.now(),
+) {
+  const restored = storedMessages.map((message) => ({ ...message }))
+  let needsPatch = false
+  for (const message of restored) {
+    const normalizedContent = normalizeInterruptedMessageContent(message.content)
+    if (normalizedContent !== message.content) {
+      message.content = normalizedContent
+      needsPatch = true
+    }
+    if (message.streaming) {
+      const age = now - message.ts
+      if (age < 60_000) continue
+      message.streaming = false
+      message.error = true
+      if (!message.content) {
+        message.content = INTERRUPTED_MESSAGE_PLACEHOLDER
+      } else if (!message.content.includes(INTERRUPTED_MESSAGE_PLACEHOLDER)) {
+        message.content = message.content + '\n\n' + INTERRUPTED_MESSAGE_PLACEHOLDER
+      }
+      needsPatch = true
+    }
+  }
+  return { restored, needsPatch }
 }
 
 export function stripThinkForModel(content: string): string {
@@ -213,6 +243,7 @@ export function useChatModel(): UseChatModelReturn {
   const persistTimerRef = useRef<number | null>(null)
   const lastSyncedKeyRef = useRef('')
   const abortRef = useRef<AbortController | null>(null)
+  const toolCallsClearTimerRef = useRef<number | null>(null)
 
   const commitMessages = useCallback((next: Msg[]) => {
     messagesRef.current = next
@@ -254,34 +285,6 @@ export function useChatModel(): UseChatModelReturn {
     [persistMessages],
   )
 
-  const normalizeRestoredMessages = useCallback(
-    (storedMessages: StoredChatMessage[], now = Date.now()) => {
-      const restored = storedMessages.map((message) => ({ ...message }))
-      let needsPatch = false
-      for (const message of restored) {
-        const normalizedContent = normalizeInterruptedMessageContent(message.content)
-        if (normalizedContent !== message.content) {
-          message.content = normalizedContent
-          needsPatch = true
-        }
-        if (message.streaming) {
-          const age = now - message.ts
-          if (age < 60_000) continue
-          message.streaming = false
-          message.error = true
-          if (!message.content) {
-            message.content = INTERRUPTED_MESSAGE_PLACEHOLDER
-          } else if (!message.content.includes(INTERRUPTED_MESSAGE_PLACEHOLDER)) {
-            message.content = message.content + '\n\n' + INTERRUPTED_MESSAGE_PLACEHOLDER
-          }
-          needsPatch = true
-        }
-      }
-      return { restored, needsPatch }
-    },
-    [],
-  )
-
   const applyHistorySnapshot = useCallback(
     (
       storedMessages: StoredChatMessage[],
@@ -317,7 +320,7 @@ export function useChatModel(): UseChatModelReturn {
       if (needsPatch && !isActivelyStreaming) void persistMessages(merged)
       return true
     },
-    [commitMessages, normalizeRestoredMessages, persistMessages],
+    [commitMessages, persistMessages],
   )
 
   const retryEmptyHistorySnapshot = useCallback(
@@ -377,6 +380,20 @@ export function useChatModel(): UseChatModelReturn {
     return () => {
       if (persistTimerRef.current !== null) {
         window.clearTimeout(persistTimerRef.current)
+      }
+    }
+  }, [])
+
+  // Unmount-only cleanup: abort any in-flight stream and clear the
+  // tool-calls dismissal timer so we don't write to an unmounted component
+  // (or to localStorage) after navigation.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+      abortRef.current = null
+      if (toolCallsClearTimerRef.current !== null) {
+        window.clearTimeout(toolCallsClearTimerRef.current)
+        toolCallsClearTimerRef.current = null
       }
     }
   }, [])
@@ -497,6 +514,10 @@ export function useChatModel(): UseChatModelReturn {
     abortRef.current?.abort()
     abortRef.current = null
     setUpgradeState('')
+    if (toolCallsClearTimerRef.current !== null) {
+      window.clearTimeout(toolCallsClearTimerRef.current)
+      toolCallsClearTimerRef.current = null
+    }
     setToolCalls([])
     const streaming = messagesRef.current.find((message) => message.streaming)
     if (streaming) {
@@ -644,6 +665,13 @@ export function useChatModel(): UseChatModelReturn {
     setPendingUploads([])
     setUploadState('')
     setUpgradeState('')
+    // Cancel any pending tool-calls clear from a previous send before
+    // resetting state — otherwise an orphan timer could wipe this send's
+    // tool calls a few seconds in.
+    if (toolCallsClearTimerRef.current !== null) {
+      window.clearTimeout(toolCallsClearTimerRef.current)
+      toolCallsClearTimerRef.current = null
+    }
     setToolCalls([])
     setLoading(true)
 
@@ -706,7 +734,13 @@ export function useChatModel(): UseChatModelReturn {
             onUpgradeAborted: (stage) => setUpgradeState('工具包加载中止: ' + stage),
             onDone: () => {
               setUpgradeState('')
-              setTimeout(() => setToolCalls([]), 3000)
+              if (toolCallsClearTimerRef.current !== null) {
+                window.clearTimeout(toolCallsClearTimerRef.current)
+              }
+              toolCallsClearTimerRef.current = window.setTimeout(() => {
+                setToolCalls([])
+                toolCallsClearTimerRef.current = null
+              }, 3000)
               const current = messagesRef.current.find((m) => m.id === assistantId)
               const finalContent = current?.content || ''
               patchMsg(assistantId, { streaming: false, content: finalContent }, true)

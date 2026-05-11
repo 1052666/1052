@@ -1,15 +1,9 @@
 import { memo, useState, type CSSProperties } from 'react'
+import type { ToolCallEntry } from '../api/agent'
 
-export type ToolCallEntry = {
-  callId: string
-  name: string
-  argsPreview?: string
-  dangerous?: boolean
-  status: 'running' | 'ok' | 'error'
-  resultPreview?: string
-  error?: string
-  durationMs?: number
-}
+// Re-export for existing consumers (e.g. tests / older imports).
+// New code should import directly from '../api/agent'.
+export type { ToolCallEntry }
 
 const panelStyle: CSSProperties = {
   margin: '4px auto 0',
