@@ -3,6 +3,10 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false, // serial: each test needs known profile state
+  // 1 worker = total serialization across files. Required because all suites
+  // share one backend (active theme profile is global state); parallel workers
+  // race apply/reset calls and corrupt each other's screenshots.
+  workers: 1,
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:10052',
