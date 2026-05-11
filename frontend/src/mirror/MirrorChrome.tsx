@@ -40,6 +40,7 @@ const SqlServers = lazy(() => import('../pages/SqlServers'))
 const SqlShellFiles = lazy(() => import('../pages/SqlShellFiles'))
 const SearchSources = lazy(() => import('../pages/SearchSources'))
 const Skills = lazy(() => import('../pages/Skills'))
+const Settings = lazy(() => import('../pages/Settings'))
 
 function Wrap(title: string, child: ReactNode) {
   return (
@@ -129,7 +130,7 @@ export function MirrorChrome() {
         <Routes>
           <Route path="/" element={<Navigate to="/chat" replace />} />
           <Route path="/chat" element={<MirrorChat />} />
-          <Route path="/settings" element={<MirrorSettings />} />
+          <Route path="/settings" element={Wrap('设置', <Settings />)} />
 
           <Route path="/calendar" element={Wrap('日历', <Calendar />)} />
           <Route
