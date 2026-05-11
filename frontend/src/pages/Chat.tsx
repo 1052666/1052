@@ -15,6 +15,7 @@ import Markdown from '../components/Markdown'
 import ToolCallPanel from '../components/ToolCallPanel'
 import { NotificationsApi, type NotificationContext } from '../api/notifications'
 import { useChatModel, type Msg } from '../hooks/useChatModel'
+import { decideSend } from './chat-send'
 
 type ParsedContent = {
   before: string
@@ -343,17 +344,29 @@ export default function Chat() {
   }
 
   const send = async () => {
-    const text = input.trim()
-    if (!text && pendingUploads.length === 0) return
+    const decision = decideSend({
+      text: input.trim(),
+      pendingUploadsCount: pendingUploads.length,
+      loading,
+      uploading,
+      historyLoaded,
+    })
 
-    if (normalizeCommandInput(text) === '/new') {
+    // Regression guard (restored after the useChatModel migration): if a
+    // stream is in flight, an upload is queued, or initial history hasn't
+    // loaded yet, drop the keystroke for *every* branch — including the
+    // page-level commands /new and /compact. The hook's sendModel has its
+    // own internal guard, but the page-level commands bypass that.
+    if (decision.kind === 'blocked' || decision.kind === 'empty') return
+
+    if (decision.kind === 'new') {
       await clearConversation()
       requestAnimationFrame(autosize)
       setSelectedCommandIndex(0)
       return
     }
 
-    if (normalizeCommandInput(text) === '/compact') {
+    if (decision.kind === 'compact') {
       setSelectedCommandIndex(0)
       setCommandMenuSuppressed(false)
       requestAnimationFrame(() => {
