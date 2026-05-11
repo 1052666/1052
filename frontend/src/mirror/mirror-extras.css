@@ -487,6 +487,5 @@
   background: rgba(229, 165, 165, 0.08);
   border: 1px solid rgba(229, 165, 165, 0.18);
   color: rgba(229, 165, 165, 0.9);
-  font-size: 13px;
   margin-top: var(--mr-g3);
 }

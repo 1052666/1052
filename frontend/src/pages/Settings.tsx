@@ -299,6 +299,7 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
     useState<AppearanceConfirmation>(null)
   const [appearancePreviewConfirmed, setAppearancePreviewConfirmed] = useState(false)
   const [appearanceExperimentalConfirmed, setAppearanceExperimentalConfirmed] = useState(false)
+  const [dirtyScopesAtConfirm, setDirtyScopesAtConfirm] = useState<string[]>([])
   const [localDiscovery, setLocalDiscovery] = useState<LocalModelDiscoveryResult | null>(null)
   const [localDiscoveryBusy, setLocalDiscoveryBusy] = useState(false)
   const [llmActionBusy, setLlmActionBusy] = useState('')
@@ -474,6 +475,7 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
     setAppearanceConfirmation(null)
     setAppearancePreviewConfirmed(false)
     setAppearanceExperimentalConfirmed(false)
+    setDirtyScopesAtConfirm([])
   }
 
   const exportThemeProfile = (profile: AppearanceThemeProfile) => {
@@ -489,6 +491,7 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
 
   const requestApplyThemeProfile = (profile: AppearanceThemeProfile) => {
     setAppearanceError('')
+    setDirtyScopesAtConfirm(getDirtyScopes())
     setAppearanceConfirmation({ kind: 'apply', profile })
     setAppearancePreviewConfirmed(false)
     setAppearanceExperimentalConfirmed(false)
@@ -512,6 +515,7 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
 
   const requestResetThemeProfile = () => {
     setAppearanceError('')
+    setDirtyScopesAtConfirm(getDirtyScopes())
     setAppearanceConfirmation({ kind: 'reset' })
     setAppearancePreviewConfirmed(false)
     setAppearanceExperimentalConfirmed(false)
@@ -1863,17 +1867,14 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
                             )}
                       </p>
                     </div>
-                    {(() => {
-                      const dirtyScopes = getDirtyScopes()
-                      return dirtyScopes.length > 0 ? (
-                        <div className="mr-dirty-warning">
-                          {t(
-                            `⚠ 当前有未保存的内容（${dirtyScopes.map((s) => SCOPE_LABELS[s] ?? s).join('、')}），切换将丢失。`,
-                            `⚠ You have unsaved content (${dirtyScopes.map((s) => SCOPE_LABELS[s] ?? s).join(', ')}) that will be lost on switch.`,
-                          )}
-                        </div>
-                      ) : null
-                    })()}
+                    {dirtyScopesAtConfirm.length > 0 ? (
+                      <div className="mr-dirty-warning">
+                        {t(
+                          `⚠ 当前有未保存的内容（${dirtyScopesAtConfirm.map((s) => SCOPE_LABELS[s] ?? s).join('、')}），切换将丢失。`,
+                          `⚠ You have unsaved content (${dirtyScopesAtConfirm.map((s) => SCOPE_LABELS[s] ?? s).join(', ')}) that will be lost on switch.`,
+                        )}
+                      </div>
+                    ) : null}
                     {appearanceConfirmation.kind === 'apply' &&
                     appearanceConfirmation.profile.review.warnings.length > 0 ? (
                       <div className="theme-profile-issues warning">
