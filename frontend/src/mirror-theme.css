@@ -50,24 +50,45 @@
   }
 }
 
-/* Reusable variable layer — referenced everywhere below. ───────────── */
+/* Reusable variable layer — referenced everywhere below.
+   Tuned per Codex终审 (74→target 90+): brighter graphite palette, alpha-only
+   surfaces so backdrop-filter actually has bg/shader to blur. Apple
+   frosted glass mistake is rgba(dark, alpha); the premium feel uses
+   rgba(white, low-alpha) over a brighter base. */
 [data-base-profile='mirror'] {
-  --mr-surface: rgba(27, 30, 34, 0.24);
-  --mr-surface-strong: rgba(27, 30, 34, 0.36);
-  --mr-control: rgba(38, 42, 48, 0.28);
-  --mr-control-hover: rgba(48, 52, 58, 0.34);
-  --mr-control-active: rgba(60, 65, 72, 0.45);
-  --mr-hairline: rgba(255, 255, 255, 0.035);
-  --mr-hairline-strong: rgba(255, 255, 255, 0.07);
+  /* Brighter graphite base — #161A1D feels like "wet铅灰" instead of
+     "黑色 SaaS panel". Used by shader as uBg and by .app as bg fallback. */
+  --bg: #161A1D;
+  --bg-grad-1: #2A3036;
+  --bg-grad-2: #111418;
+  /* Alpha-only surface ladder — these tint the shader/bg with white veil
+     instead of replacing it with dark color. Crucial for backdrop-filter
+     to read as "luminous material" rather than "panel". */
+  --surface-0: rgba(255, 255, 255, 0.025);
+  --surface-1: rgba(255, 255, 255, 0.04);
+  --surface-2: rgba(255, 255, 255, 0.065);
+  --surface-3: rgba(255, 255, 255, 0.095);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --mr-surface: rgba(38, 43, 49, 0.30);
+  --mr-surface-strong: rgba(48, 54, 61, 0.42);
+  --mr-control: rgba(46, 52, 59, 0.34);
+  --mr-control-hover: rgba(58, 65, 73, 0.42);
+  --mr-control-active: rgba(70, 78, 88, 0.52);
+  --mr-hairline: rgba(255, 255, 255, 0.05);
+  --mr-hairline-strong: rgba(255, 255, 255, 0.105);
   --mr-bottom-shadow: rgba(0, 0, 0, 0.28);
   --mr-elevation: 0 8px 24px rgba(0, 0, 0, 0.18);
-  --mr-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --mr-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --mr-inset-bottom: inset 0 -1px 0 rgba(0, 0, 0, 0.28);
-  --mr-backdrop: blur(36px) saturate(0.82) brightness(1.035) contrast(1.015);
-  --mr-backdrop-small: blur(20px) saturate(0.82) brightness(1.035);
-  --mr-radius-card: 14px;
-  --mr-radius-panel: 16px;
-  --mr-radius-control: 9px;
+  /* Slightly stronger blur + brightness lift; saturate stays below 1
+     (B&O signature; Apple frosted's error is saturate > 1). */
+  --mr-backdrop: blur(40px) saturate(0.8) brightness(1.055) contrast(1.01);
+  --mr-backdrop-small: blur(22px) saturate(0.8) brightness(1.045);
+  /* Softer corner radii — bigger feels more like cast hardware,
+     less like generic web cards. */
+  --mr-radius-card: 16px;
+  --mr-radius-panel: 18px;
+  --mr-radius-control: 11px;
   --mr-transition: 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -265,33 +286,98 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  /* ::before — SILK SURFACE TEXTURE (NEW)
+     Per Plan B: the card IS the material, not a window onto a textured bg.
+     Two layers blended over card surface with mix-blend overlay so the
+     noise reads as cloth weave not as TV static:
+       1) SVG fractalNoise — static silk fiber texture (inline data URI,
+          browser caches and all cards share the parsed SVG)
+       2) Slow linear-gradient sweep — "光在丝绸上缓慢滑动" (GPT spec) */
+  background-image:
+    /* Finer-grain silk fiber:
+         baseFrequency 0.62 → 0.95   (smaller threads, less "TV static")
+         numOctaves    2 → 3         (more layered detail per fiber)
+         alpha         0.55 → 0.16   (much softer noise contrast)
+       Combined effect: tightly-woven silk weave rather than rough cloth. */
+    url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='3' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.16 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23s)'/%3E%3C/svg%3E"),
+    linear-gradient(
+      115deg,
+      transparent 32%,
+      rgba(255, 255, 255, 0.035) 50%,
+      transparent 68%
+    );
+  background-size:
+    200px 200px,
+    220% 100%;
+  background-repeat: repeat, no-repeat;
+  background-position: 0 0, -120% 0;
+  /* opacity is the master volume on the silk layer. 0.55 keeps the
+     weave perceptible without obscuring text underneath. */
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 0;
+  animation: mr-silk-flow 22s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+  animation-delay: var(--mr-card-delay, 0s);
+}
+
+/* Slow horizontal flow of the silk sweep band. The noise stays still
+   (background-position 0 0 unchanged); only the linear-gradient slides. */
+@keyframes mr-silk-flow {
+  from { background-position: 0 0, -120% 0; }
+  to   { background-position: 0 0,  120% 0; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   ::after — SPECULAR EDGE REFLECTION (moved here from ::before)
+   Layered conic-gradient + mask exclude for the 1px rim highlight.
+   Two layers: primary specular (peak ~340° from --mr-light-angle 285°)
+   + secondary 180° environmental bounce. Animation drifts the angle.
+   ───────────────────────────────────────────────────────────────────── */
+[data-base-profile='mirror'][data-theme='dark'] .settings-section::after,
+[data-base-profile='mirror'][data-theme='dark'] .settings-row-stack::after,
+[data-base-profile='mirror'][data-theme='dark'] .settings-preset-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .settings-model-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .theme-profile-preset::after,
+[data-base-profile='mirror'][data-theme='dark'] .theme-profile-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .usage-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .memory-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .task-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .repo-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .resource-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .skill-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .social-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .search-source-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .pkm-result-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .pkm-sop-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .modal::after,
+[data-base-profile='mirror'][data-theme='dark'] .card::after,
+[data-base-profile='mirror'][data-theme='dark'] .sql-workbench-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .sql-ds-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .sql-file-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .sql-var-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .orch-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
   padding: 1px;
-  /* Primary specular reflection — uses the live --mr-light-angle so the
-     edge highlight slides slowly around the card. v7 raises peak alpha
-     (0.42 → 0.58) and widens secondary bounce so the light variance is
-     visible without staring. Each card carries its own --mr-card-angle
-     (nth-child below) so the cohort never aligns. */
   background:
     conic-gradient(
       from var(--mr-light-angle) at 50% 50%,
       rgba(255, 255, 255, 0.00)   0deg,
-      rgba(255, 255, 255, 0.58)  35deg,
-      rgba(255, 255, 255, 0.22)  85deg,
-      rgba(255, 255, 255, 0.04) 150deg,
-      rgba(255, 255, 255, 0.00) 210deg,
-      rgba(255, 255, 255, 0.11) 285deg,
+      rgba(255, 255, 255, 0.46)  55deg,
+      rgba(255, 255, 255, 0.18) 110deg,
+      rgba(255, 255, 255, 0.04) 170deg,
+      rgba(255, 255, 255, 0.00) 220deg,
+      rgba(255, 255, 255, 0.10) 295deg,
       rgba(255, 255, 255, 0.00) 360deg
     ),
-    /* Secondary environmental bounce — opposite side, weaker. v7
-       strengthens this so the bottom-right of every card carries a
-       faint counter-reflection (matters when the primary is sweeping
-       away from the user's eye). */
     conic-gradient(
       from calc(var(--mr-light-angle) + 180deg) at 50% 50%,
       rgba(255, 255, 255, 0.00)   0deg,
       rgba(255, 255, 255, 0.13)  45deg,
-      rgba(255, 255, 255, 0.00)  120deg,
-      rgba(255, 255, 255, 0.00)  360deg
+      rgba(255, 255, 255, 0.00) 120deg,
+      rgba(255, 255, 255, 0.00) 360deg
     );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -299,14 +385,22 @@
   -webkit-mask-composite: xor;
           mask-composite: exclude;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
   animation: mr-light-sweep 18s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
   animation-delay: var(--mr-card-delay, 0s);
 }
 
 /* Phase / angle spread — four cohorts so any group of cards on screen
-   never all hits the same conic position. Negative delays start each
-   cohort partway through the sweep, so first paint already shows variance. */
+   never all hits the same conic position.
+   ──────────────────────────────────────
+   Angle math: conic-gradient `from X` puts color stop 0deg at angle X
+   (CSS angles: 0=top, 90=right, 180=bottom, 270=left, clockwise).
+   With peak stops at +55deg from `from`, we want peak at ~315deg = the
+   upper-left of each card (matches the reference image's lighting
+   from above-left). So `from` = 315 - 55 = 260deg as the base, with
+   cohorts spread around it. The sweep animation adds another +50deg
+   over 18s, so peak migrates from 315° → 5° (upper-left → top → top-right).
+   Negative animation delays prevent visible cards from aligning at boot. */
 [data-base-profile='mirror'] .settings-section,
 [data-base-profile='mirror'] .settings-preset-card,
 [data-base-profile='mirror'] .theme-profile-preset,
@@ -314,7 +408,7 @@
 [data-base-profile='mirror'] .memory-card,
 [data-base-profile='mirror'] .pkm-result-card,
 [data-base-profile='mirror'] .card {
-  --mr-card-angle: 218deg;
+  --mr-card-angle: 285deg; /* peak ~340° = 顶部偏左 (closer to top center) */
   --mr-card-delay: 0s;
 }
 
@@ -325,7 +419,7 @@
 [data-base-profile='mirror'] .memory-card:nth-of-type(4n+2),
 [data-base-profile='mirror'] .pkm-result-card:nth-of-type(4n+2),
 [data-base-profile='mirror'] .card:nth-of-type(4n+2) {
-  --mr-card-angle: 200deg;
+  --mr-card-angle: 270deg; /* peak ~325° = 偏左但更接近顶 */
   --mr-card-delay: -1.5s;
 }
 
@@ -336,7 +430,7 @@
 [data-base-profile='mirror'] .memory-card:nth-of-type(4n+3),
 [data-base-profile='mirror'] .pkm-result-card:nth-of-type(4n+3),
 [data-base-profile='mirror'] .card:nth-of-type(4n+3) {
-  --mr-card-angle: 236deg;
+  --mr-card-angle: 300deg; /* peak ~355° ≈ 正顶 */
   --mr-card-delay: -4.2s;
 }
 
@@ -347,7 +441,7 @@
 [data-base-profile='mirror'] .memory-card:nth-of-type(4n+4),
 [data-base-profile='mirror'] .pkm-result-card:nth-of-type(4n+4),
 [data-base-profile='mirror'] .card:nth-of-type(4n+4) {
-  --mr-card-angle: 248deg;
+  --mr-card-angle: 315deg; /* peak ~10° = 顶部偏右 (some variation) */
   --mr-card-delay: -7.1s;
 }
 
@@ -359,39 +453,10 @@
   }
 }
 
-/* ::after — thin 1px metal edge sliver at the upper-left peak, Arc's
-   trick. Same mask technique, narrower angle window, higher alpha. */
-[data-base-profile='mirror'][data-theme='dark'] .settings-section::after,
-[data-base-profile='mirror'][data-theme='dark'] .settings-preset-card::after,
-[data-base-profile='mirror'][data-theme='dark'] .settings-model-card::after,
-[data-base-profile='mirror'][data-theme='dark'] .theme-profile-preset::after,
-[data-base-profile='mirror'][data-theme='dark'] .theme-profile-card::after,
-[data-base-profile='mirror'][data-theme='dark'] .usage-card::after,
-[data-base-profile='mirror'][data-theme='dark'] .memory-card::after,
-[data-base-profile='mirror'][data-theme='dark'] .pkm-result-card::after,
-[data-base-profile='mirror'][data-theme='dark'] .modal::after,
-[data-base-profile='mirror'][data-theme='dark'] .card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: conic-gradient(
-    from 215deg at 50% 50%,
-    rgba(255, 255, 255, 0.00)  0deg,
-    rgba(255, 255, 255, 0.00) 25deg,
-    rgba(255, 255, 255, 0.85) 38deg,
-    rgba(255, 255, 255, 0.00) 50deg,
-    rgba(255, 255, 255, 0.00) 360deg
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  pointer-events: none;
-  z-index: 2;
-}
+/* (Removed) — old metal sliver ::after block. ::after is now used by
+   the specular edge layer above (silk noise on ::before + edge highlight
+   on ::after pattern). Metal sliver effect is folded into ::after's
+   peak alpha if needed later. */
 
 /* Light variant — same geometry, dark reflections instead of bright ones
    (light hits the back of the edge, so the visible rim is shadow on light).
@@ -551,8 +616,16 @@
 }
 
 [data-base-profile='mirror'] .settings-row {
-  border-bottom: 1px solid var(--mr-hairline);
-  padding: 13px 16px;
+  /* Codex ROI #3: softer divider + roomier padding makes the section
+     read as a single liquid surface rather than a stacked form. */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.032);
+  padding: 15px 18px;
+}
+
+[data-base-profile='mirror'] {
+  /* Codex ROI #4: meta text was too dim. Lift fg-4 so secondary copy
+     stays legible against the brighter graphite. */
+  --fg-4: #7E8792;
 }
 
 [data-base-profile='mirror'] .settings-row:last-child {

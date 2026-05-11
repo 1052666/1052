@@ -129,13 +129,13 @@ const FRAGMENT_SHADER = `
     // (d) Film grain — kept low so it doesn't read as TV noise.
     float grain = (hash(gl_FragCoord.xy + floor(t * 8.0)) - 0.5) * 0.010;
 
-    // (e) Mouse halo — separate channel that can push past the ambient
-    // clamp. Ambient field is the "still material" layer; halo is the
-    // "you touched it" reply.
+    // (e) Mouse halo — separate channel. CRITICAL: keep low enough that
+    // the halo never bleaches text underneath the cursor. 0.22 → 0.07
+    // after user reported text becoming illegible inside the halo.
     vec2 mouseAspect = uMouse;
     mouseAspect.x *= uResolution.x / uResolution.y;
     float mouseDist = distance(aspect, mouseAspect);
-    float mouseHalo = exp(-mouseDist * 6.0) * uMouseStrength * 0.22;
+    float mouseHalo = exp(-mouseDist * 6.0) * uMouseStrength * 0.07;
 
     // Ambient (everything except mouse halo). v7 clamp ±0.16 (v6 was
     // ±0.095) so the satin layer can contribute its full character
