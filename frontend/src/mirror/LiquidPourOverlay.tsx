@@ -7,14 +7,16 @@ interface LiquidPourOverlayProps {
 }
 
 /**
- * Mirror profile entry animation — "墨滴归心" (ink drops converging).
+ * Mirror profile entry animation — "汞滴汇心" (mercury droplets converging).
  *
- * Visual: at t=0 four soft dark ink drops sit at the corners. They drift
- * inward on independent eased arcs, overlap at center, shrink, fade.
+ * Visual: at t=0 four luminous silver/chrome droplets at the corners,
+ * drifting inward on independent eased arcs. They overlap at center
+ * forming a single bright spot, shrink, fade. The metaphor is liquid
+ * metal pooling into a mirror surface.
  *
- * No backdrop-filter, no UI occlusion — the mirror UI is fully visible
- * underneath from frame 1. The blobs are *decorative shadows* on the
- * mirror surface, not a curtain blocking it.
+ * Bright blobs against the dark mirror bg give strong contrast — visible
+ * at a glance, not dependent on careful observation. No backdrop-filter,
+ * no occlusion. UI clear from frame 1.
  *
  * Reduced-motion: caller skips mount via shouldShowPour().
  */
@@ -57,11 +59,9 @@ export function LiquidPourOverlay({ onDone }: LiquidPourOverlayProps) {
   // Overall overlay opacity: hold full until 75% then fade in final 25%.
   const veilOpacity = progress < 0.75 ? 1 : Math.max(0, 1 - (progress - 0.75) / 0.25)
 
-  // Faint dark tint over entire viewport throughout — gives atmospheric
-  // sense that "something is settling" without occluding UI clarity.
   const overlayStyle: CSSProperties = {
     opacity: veilOpacity,
-    backgroundColor: 'rgba(8, 10, 12, 0.20)',
+    // No tint — let mercury blobs do all visual work against dark UI.
   }
 
   return (
@@ -75,7 +75,16 @@ export function LiquidPourOverlay({ onDone }: LiquidPourOverlayProps) {
             top: `${b.y.toFixed(2)}%`,
             width: `${b.size.toFixed(2)}vmax`,
             height: `${b.size.toFixed(2)}vmax`,
-            background: `radial-gradient(circle, rgba(6,8,10,${b.baseAlpha.toFixed(3)}) 0%, rgba(6,8,10,${(b.baseAlpha * 0.55).toFixed(3)}) 35%, transparent 70%)`,
+            // Mercury droplet — silver highlight center → metallic body →
+            // dark rim → transparent. Reads as a tangible liquid metal
+            // bead against dark mirror bg.
+            background: `radial-gradient(circle,
+              rgba(210, 215, 225, ${(b.baseAlpha * 0.55).toFixed(3)}) 0%,
+              rgba(140, 150, 165, ${(b.baseAlpha * 0.65).toFixed(3)}) 25%,
+              rgba(60, 70, 85, ${(b.baseAlpha * 0.55).toFixed(3)}) 55%,
+              rgba(15, 18, 22, ${(b.baseAlpha * 0.30).toFixed(3)}) 75%,
+              transparent 90%
+            )`,
           }}
         />
       ))}
