@@ -117,9 +117,7 @@ export function MirrorSettings() {
                       name={p.name}
                       url={p.baseUrl || undefined}
                       modelId={p.modelId}
-                      onClick={() =>
-                        model.applyLlmPreset({ baseUrl: p.baseUrl, modelId: p.modelId })
-                      }
+                      onClick={p.baseUrl ? () => model.applyLlmPreset({ baseUrl: p.baseUrl, modelId: p.modelId }) : undefined}
                       selected={
                         !!p.baseUrl &&
                         model.baseUrl === p.baseUrl &&

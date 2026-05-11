@@ -562,10 +562,6 @@
   gap: var(--mr-g2);
   margin-top: var(--mr-g4);
 }
-[data-base-profile='mirror'] .mr-settings-sub > h4.mr-text-title + .mr-settings-field {
-  margin-top: var(--mr-g4);
-}
-
 /* Profile chip row — wraps when many profiles present */
 [data-base-profile='mirror'] .mr-profile-chip-row {
   display: flex;
