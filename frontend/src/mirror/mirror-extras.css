@@ -270,3 +270,124 @@
   border-color: var(--mr-hair-strong);
   background: var(--mr-surface-strong);
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   MirrorSidebar — left-accent-bar nav idiom (IU-7 Task 15)
+   ───────────────────────────────────────────────────────────────────── */
+[data-base-profile='mirror'] .mr-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.018);
+  backdrop-filter: blur(48px) saturate(0.82) brightness(1.04);
+  -webkit-backdrop-filter: blur(48px) saturate(0.82) brightness(1.04);
+  padding: var(--mr-g6) var(--mr-g4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-g5);
+  overflow-y: auto;
+}
+
+[data-base-profile='mirror'] .mr-sidebar-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--mr-g3);
+}
+
+[data-base-profile='mirror'] .mr-sidebar-collapse {
+  background: transparent;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--mr-radius-control);
+  color: var(--fg-4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-base-profile='mirror'] .mr-sidebar-collapse:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fg-2);
+}
+[data-base-profile='mirror'] .mr-sidebar-collapse:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.30);
+  outline-offset: 2px;
+}
+
+[data-base-profile='mirror'] .mr-sidebar-section {
+  padding: 0 var(--mr-g3);
+}
+
+[data-base-profile='mirror'] .mr-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+[data-base-profile='mirror'] .mr-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-g3);
+  padding: var(--mr-g2) var(--mr-g4);
+  margin-left: -2px; /* compensate left bar so text aligns */
+  border-radius: var(--mr-radius-control);
+  border-left: 2px solid transparent;
+  color: var(--fg-3);
+  font-size: 14px;
+  font-weight: 420;
+  text-decoration: none;
+  transition: var(--mr-transition);
+}
+[data-base-profile='mirror'] .mr-nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fg-2);
+}
+[data-base-profile='mirror'] .mr-nav-item.is-active {
+  border-left-color: rgba(255, 255, 255, 0.5);
+  color: var(--fg-1);
+  font-weight: 500;
+  background: transparent;
+}
+[data-base-profile='mirror'] .mr-nav-item:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.30);
+  outline-offset: 2px;
+}
+[data-base-profile='mirror'] .mr-nav-icon {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+[data-base-profile='mirror'] .mr-nav-item.is-active .mr-nav-icon {
+  opacity: 1;
+}
+
+[data-base-profile='mirror'] .mr-sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mr-g4);
+  padding: 0 var(--mr-g2);
+}
+[data-base-profile='mirror'] .mr-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+[data-base-profile='mirror'] .mr-user-row {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-g3);
+  padding: var(--mr-g2) 0;
+}
+[data-base-profile='mirror'] .mr-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(160, 140, 220, 0.6), rgba(140, 180, 220, 0.6));
+  flex-shrink: 0;
+}
+[data-base-profile='mirror'] .mr-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
