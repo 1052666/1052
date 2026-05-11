@@ -97,7 +97,11 @@ describe('useSettingsPageModel', () => {
     api.update.mockReset()
   })
 
-  it('exposes initial defaults before settings load', () => {
+  it('exposes initial defaults before settings load', async () => {
+    const api = await getSettingsApi()
+    // Pending promise so initial fetch never resolves during this test.
+    api.get.mockImplementation(() => new Promise<PublicSettings>(() => undefined))
+
     const { result } = renderHook(() => useSettingsPageModel())
     expect(result.current.loaded).toBeNull()
     expect(result.current.baseUrl).toBe('')
