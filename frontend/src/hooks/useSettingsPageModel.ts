@@ -97,7 +97,6 @@ export interface UseSettingsPageModelReturn {
   saveState: SaveState
   error: string
   save: (theme: PublicSettings['appearance']['theme']) => Promise<void>
-  buildPatch: (theme: PublicSettings['appearance']['theme']) => SettingsPatch
   isDirty: boolean
 
   // Composite helpers
@@ -110,7 +109,6 @@ export interface UseSettingsPageModelReturn {
 
   // External sync (e.g. after LLM profile activate / upsert)
   syncLlmSettings: (settings: PublicSettings) => void
-  applyLoaded: (settings: PublicSettings) => void
 }
 
 // Pure helper exported for parity test: build SettingsPatch from current state.
@@ -631,11 +629,9 @@ export function useSettingsPageModel(): UseSettingsPageModelReturn {
     saveState,
     error,
     save,
-    buildPatch,
     isDirty,
     applyLlmPreset,
     applyImagePreset,
     syncLlmSettings,
-    applyLoaded,
   }
 }

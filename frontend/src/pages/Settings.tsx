@@ -428,7 +428,7 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
 
   // Patch construction + SettingsApi.update + state machine all live in
   // the hook. Settings.tsx only provides the theme (owned by ThemeContext).
-  const save = () => saveModel(theme)
+  // (No `save` wrapper: would discard the Promise type — call saveModel inline.)
 
   const syncAppearanceThemes = async (themes: PublicAppearanceThemes) => {
     setAppearanceThemes(themes)
@@ -640,7 +640,12 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
           </div>
         </div>
         <div className="toolbar">
-          <button className="chip primary" onClick={save} disabled={state === 'saving'} type="button">
+          <button
+            className="chip primary"
+            onClick={() => void saveModel(theme)}
+            disabled={state === 'saving'}
+            type="button"
+          >
             {state === 'saving'
               ? t('保存中...', 'Saving...')
               : state === 'saved'

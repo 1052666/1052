@@ -2,6 +2,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PublicSettings } from '../api/settings'
+import { makeSettings } from '../test-utils/settings-fixtures'
 import { useSettingsPageModel } from './useSettingsPageModel'
 
 // Mock SettingsApi — hook must call get() on mount, update() on save().
@@ -27,67 +28,6 @@ async function getSettingsApi() {
     get: ReturnType<typeof vi.fn>
     update: ReturnType<typeof vi.fn>
   }
-}
-
-function makeSettings(overrides: Partial<PublicSettings> = {}): PublicSettings {
-  const base: PublicSettings = {
-    llm: {
-      baseUrl: 'https://api.openai.com/v1',
-      modelId: 'gpt-4o-mini',
-      kind: 'cloud',
-      provider: 'openai-compatible',
-      apiFormat: 'openai-compatible',
-      activeProfileId: 'profile-1',
-      profiles: [],
-      taskRoutes: [],
-      hasApiKey: true,
-      apiKeyMask: 'sk-***',
-    },
-    imageGeneration: {
-      apiFormat: 'openai-compatible',
-      baseUrl: 'https://api.openai.com/v1',
-      modelId: 'gpt-image-1',
-      size: 'auto',
-      quality: 'auto',
-      background: 'auto',
-      outputFormat: 'png',
-      outputCompression: 80,
-      hasApiKey: false,
-      apiKeyMask: '',
-    },
-    appearance: { theme: 'dark', language: 'zh-CN' },
-    agent: {
-      streaming: true,
-      userPrompt: '',
-      fullAccess: false,
-      contextMessageLimit: 50,
-      progressiveDisclosureEnabled: true,
-      providerCachingEnabled: true,
-      checkpointEnabled: true,
-      seedOnResumeEnabled: true,
-      upgradeDebugEventsEnabled: true,
-      autoCompactEnabled: true,
-      autoCompactThreshold: 100,
-      morningBrief: { enabled: false, time: '09:30' },
-    },
-    ocr: {
-      provider: 'uapis',
-      customBaseUrl: '',
-      customModelId: '',
-      hasCustomApiKey: false,
-      customApiKeyMask: '',
-    },
-    uapis: {
-      hasApiKey: false,
-      apiKeyMask: '',
-      mode: 'free-ip-quota',
-      home: 'https://uapis.cn',
-      console: 'https://uapis.cn/console',
-      anonymousMonthlyCredits: 1500,
-      apiKeyMonthlyCredits: 3500,
-    },
-  }
-  return { ...base, ...overrides }
 }
 
 describe('useSettingsPageModel', () => {
@@ -129,9 +69,10 @@ describe('useSettingsPageModel', () => {
     expect(result.current.contextMessageLimit).toBe(50)
   })
 
-  it('updates fields via setters and reflects in buildPatch()', async () => {
+  it('updates fields via setters and persists them through save()', async () => {
     const api = await getSettingsApi()
     api.get.mockResolvedValueOnce(makeSettings())
+    api.update.mockImplementation(async (_patch) => makeSettings())
 
     const { result } = renderHook(() => useSettingsPageModel())
     await waitFor(() => {
@@ -143,7 +84,14 @@ describe('useSettingsPageModel', () => {
       result.current.setModelId('deepseek-chat')
     })
 
-    const patch = result.current.buildPatch('dark')
+    expect(result.current.baseUrl).toBe('https://api.deepseek.com/v1')
+    expect(result.current.modelId).toBe('deepseek-chat')
+
+    await act(async () => {
+      await result.current.save('dark')
+    })
+
+    const patch = api.update.mock.calls[0][0]
     expect(patch.llm?.baseUrl).toBe('https://api.deepseek.com/v1')
     expect(patch.llm?.modelId).toBe('deepseek-chat')
   })
