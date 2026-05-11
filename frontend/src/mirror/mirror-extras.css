@@ -443,3 +443,13 @@
   height: 100vh;
   overflow: hidden;
 }
+
+/* Stub-only utilities (IU-7) — PR2/PR3 replace stub bodies */
+[data-base-profile='mirror'] .mr-todo {
+  padding: var(--mr-g7);
+  color: var(--fg-4);
+  text-align: center;
+}
+[data-base-profile='mirror'] .mr-page-loading {
+  flex: 1;
+}
