@@ -225,7 +225,8 @@
 [data-base-profile='mirror'] .sql-ds-card,
 [data-base-profile='mirror'] .sql-file-card,
 [data-base-profile='mirror'] .sql-var-card,
-[data-base-profile='mirror'] .orch-card {
+[data-base-profile='mirror'] .orch-card,
+[data-base-profile='mirror'] .mr-card {
   background: var(--mr-surface);
   backdrop-filter: var(--mr-backdrop);
   -webkit-backdrop-filter: var(--mr-backdrop);
@@ -278,7 +279,8 @@
 [data-base-profile='mirror'][data-theme='dark'] .sql-ds-card,
 [data-base-profile='mirror'][data-theme='dark'] .sql-file-card,
 [data-base-profile='mirror'][data-theme='dark'] .sql-var-card,
-[data-base-profile='mirror'][data-theme='dark'] .orch-card {
+[data-base-profile='mirror'][data-theme='dark'] .orch-card,
+[data-base-profile='mirror'][data-theme='dark'] .mr-card {
   position: relative;
   isolation: isolate;
 }
@@ -305,7 +307,8 @@
 [data-base-profile='mirror'][data-theme='dark'] .sql-ds-card::before,
 [data-base-profile='mirror'][data-theme='dark'] .sql-file-card::before,
 [data-base-profile='mirror'][data-theme='dark'] .sql-var-card::before,
-[data-base-profile='mirror'][data-theme='dark'] .orch-card::before {
+[data-base-profile='mirror'][data-theme='dark'] .orch-card::before,
+[data-base-profile='mirror'][data-theme='dark'] .mr-card::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -379,7 +382,8 @@
 [data-base-profile='mirror'][data-theme='dark'] .sql-ds-card::after,
 [data-base-profile='mirror'][data-theme='dark'] .sql-file-card::after,
 [data-base-profile='mirror'][data-theme='dark'] .sql-var-card::after,
-[data-base-profile='mirror'][data-theme='dark'] .orch-card::after {
+[data-base-profile='mirror'][data-theme='dark'] .orch-card::after,
+[data-base-profile='mirror'][data-theme='dark'] .mr-card::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -394,7 +398,7 @@
     conic-gradient(
       from calc(var(--mr-cursor-angle, var(--mr-light-angle)) + var(--mr-card-angle-offset, 0deg) + var(--mr-coupled-angle, 0deg)) at 50% 50%,
       rgba(255, 255, 255, 0.00)   0deg,
-      rgba(255, 255, 255, calc(0.46 + var(--mr-hover-boost, 0) + var(--mr-coupled-strength, 0)))  55deg,
+      rgba(255, 255, 255, calc(var(--mr-specular-base, 0.46) + var(--mr-hover-boost, 0) + var(--mr-coupled-strength, 0)))  55deg,
       rgba(255, 255, 255, 0.18) 110deg,
       rgba(255, 255, 255, 0.04) 170deg,
       rgba(255, 255, 255, 0.00) 220deg,
@@ -446,7 +450,8 @@
 [data-base-profile='mirror'] .usage-card,
 [data-base-profile='mirror'] .memory-card,
 [data-base-profile='mirror'] .pkm-result-card,
-[data-base-profile='mirror'] .card {
+[data-base-profile='mirror'] .card,
+[data-base-profile='mirror'] .mr-card {
   --mr-card-angle: 285deg;
   --mr-card-angle-offset: 0deg;
   --mr-card-delay: 0s;
@@ -458,7 +463,8 @@
 [data-base-profile='mirror'] .usage-card:nth-of-type(4n+2),
 [data-base-profile='mirror'] .memory-card:nth-of-type(4n+2),
 [data-base-profile='mirror'] .pkm-result-card:nth-of-type(4n+2),
-[data-base-profile='mirror'] .card:nth-of-type(4n+2) {
+[data-base-profile='mirror'] .card:nth-of-type(4n+2),
+[data-base-profile='mirror'] .mr-card:nth-of-type(4n+2) {
   --mr-card-angle-offset: -15deg; /* v1: 270deg base = 285 + (-15) */
   --mr-card-delay: -1.5s;
 }
@@ -469,7 +475,8 @@
 [data-base-profile='mirror'] .usage-card:nth-of-type(4n+3),
 [data-base-profile='mirror'] .memory-card:nth-of-type(4n+3),
 [data-base-profile='mirror'] .pkm-result-card:nth-of-type(4n+3),
-[data-base-profile='mirror'] .card:nth-of-type(4n+3) {
+[data-base-profile='mirror'] .card:nth-of-type(4n+3),
+[data-base-profile='mirror'] .mr-card:nth-of-type(4n+3) {
   --mr-card-angle-offset: 15deg; /* v1: 300deg base = 285 + 15 */
   --mr-card-delay: -4.2s;
 }
@@ -480,10 +487,21 @@
 [data-base-profile='mirror'] .usage-card:nth-of-type(4n+4),
 [data-base-profile='mirror'] .memory-card:nth-of-type(4n+4),
 [data-base-profile='mirror'] .pkm-result-card:nth-of-type(4n+4),
-[data-base-profile='mirror'] .card:nth-of-type(4n+4) {
+[data-base-profile='mirror'] .card:nth-of-type(4n+4),
+[data-base-profile='mirror'] .mr-card:nth-of-type(4n+4) {
   --mr-card-angle-offset: 30deg; /* v1: 315deg base = 285 + 30 */
   --mr-card-delay: -7.1s;
 }
+
+/* IU-7 PR3 fix: level-1/2/3 specular alpha decay.
+   The ::after peak alpha formula reads --mr-specular-base (default 0.46);
+   level-2 cards (preset cards, chips) damp to 0.22, level-3 (tertiary
+   surfaces) damp to 0.10. Because .mr-card-level-2 / -3 elements ALSO
+   carry the base .mr-card class, the ::after rule still matches; this
+   block just overrides the var for cascade-based level differentiation. */
+[data-base-profile='mirror'] .mr-card { --mr-specular-base: 0.46; }
+[data-base-profile='mirror'] .mr-card-level-2 { --mr-specular-base: 0.22; }
+[data-base-profile='mirror'] .mr-card-level-3 { --mr-specular-base: 0.10; }
 
 /* When the user prefers reduced motion, freeze the sweep — the angle
    spread per cohort still gives the multi-light look without animation.
