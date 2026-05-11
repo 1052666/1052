@@ -1,45 +1,9 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { NotificationsApi } from '../api/notifications'
-import {
-  IconBell,
-  IconCalendar,
-  IconChat,
-  IconChevron,
-  IconDatabase,
-  IconEdit,
-  IconMemory,
-  IconNotes,
-  IconRepo,
-  IconResources,
-  IconSearchGrid,
-  IconSettings,
-  IconSkills,
-  IconSocial,
-  IconSparkle,
-  IconToolbox,
-  IconWiki,
-} from './Icons'
+import { IconChevron, IconEdit } from './Icons'
+import { NAV_ITEMS } from '../mirror/nav'
 import ProfileModal, { type Profile } from './ProfileModal'
-
-const items = [
-  { to: '/chat', label: '聊天', Icon: IconChat },
-  { to: '/calendar', label: '日历', Icon: IconCalendar },
-  { to: '/notifications', label: '通知中心', Icon: IconBell },
-  { to: '/repository', label: '仓库', Icon: IconRepo },
-  { to: '/notes', label: '笔记', Icon: IconNotes },
-  { to: '/wiki', label: 'Wiki', Icon: IconWiki },
-  { to: '/pkm', label: 'PKM', Icon: IconSearchGrid },
-  { to: '/output-profiles', label: '输出配方', Icon: IconSparkle },
-  { to: '/resources', label: '资源列表', Icon: IconResources },
-  { to: '/memory', label: '记忆中心', Icon: IconMemory },
-  { to: '/social-channels', label: '社交通道', Icon: IconSocial },
-  { to: '/toolbox', label: '工具箱', Icon: IconToolbox },
-  { to: '/sql', label: 'SQL 工作台', Icon: IconDatabase },
-  { to: '/search-sources', label: '搜索源', Icon: IconSearchGrid },
-  { to: '/skills', label: 'Skill 中心', Icon: IconSkills },
-  { to: '/settings', label: '设置', Icon: IconSettings },
-]
 
 const KEY = 'agent.profile'
 const COLLAPSED_KEY = 'agent.sidebar.collapsed'
@@ -122,15 +86,15 @@ export default function Sidebar() {
 
         <nav className="nav">
           <div className="nav-section-title">导航</div>
-          {items.map(({ to, label, Icon }) => (
+          {NAV_ITEMS.map(({ path, label, Icon }) => (
             <NavLink
-              key={to}
-              to={to}
+              key={path}
+              to={path}
               className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}
             >
               <Icon size={17} />
               <span className="nav-label">{label}</span>
-              {to === '/notifications' && unread > 0 ? (
+              {path === '/notifications' && unread > 0 ? (
                 <span className="nav-badge">{unread > 99 ? '99+' : unread}</span>
               ) : null}
             </NavLink>
