@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 
-const DURATION_MS = 1200
+const DURATION_MS = 2000
 
 interface LiquidPourOverlayProps {
   onDone: () => void
@@ -54,11 +54,14 @@ export function LiquidPourOverlay({ onDone }: LiquidPourOverlayProps) {
     return { x, y, size, baseAlpha: b.baseAlpha * alphaScale }
   })
 
-  // Overall overlay opacity: hold until 65% then fade over remaining 35%.
-  const veilOpacity = progress < 0.65 ? 1 : Math.max(0, 1 - (progress - 0.65) / 0.35)
+  // Overall overlay opacity: hold full until 75% then fade in final 25%.
+  const veilOpacity = progress < 0.75 ? 1 : Math.max(0, 1 - (progress - 0.75) / 0.25)
 
+  // Faint dark tint over entire viewport throughout — gives atmospheric
+  // sense that "something is settling" without occluding UI clarity.
   const overlayStyle: CSSProperties = {
     opacity: veilOpacity,
+    backgroundColor: 'rgba(8, 10, 12, 0.20)',
   }
 
   return (
@@ -91,10 +94,10 @@ interface BlobSeed {
 }
 
 const BLOB_SEEDS: BlobSeed[] = [
-  { x0: 18, y0: 26, size0: 38, phase: 0.0,  baseAlpha: 0.62 },
-  { x0: 86, y0: 20, size0: 32, phase: 0.05, baseAlpha: 0.55 },
-  { x0: 14, y0: 78, size0: 42, phase: 0.10, baseAlpha: 0.58 },
-  { x0: 82, y0: 84, size0: 30, phase: 0.08, baseAlpha: 0.52 },
+  { x0: 18, y0: 26, size0: 56, phase: 0.0,  baseAlpha: 0.82 },
+  { x0: 86, y0: 20, size0: 48, phase: 0.08, baseAlpha: 0.74 },
+  { x0: 14, y0: 78, size0: 60, phase: 0.15, baseAlpha: 0.78 },
+  { x0: 82, y0: 84, size0: 44, phase: 0.12, baseAlpha: 0.70 },
 ]
 
 function lerp(a: number, b: number, t: number): number {
