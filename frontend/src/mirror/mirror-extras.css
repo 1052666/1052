@@ -623,3 +623,19 @@
   /* mr-input height + radius inherited; ensure native select arrow stays visible */
   padding-right: var(--mr-g3);
 }
+
+/* IU-12 (A): error banner above the right-col stat cards.
+   Surfaces useTokenUsage.error so the user can retry instead of seeing 0s. */
+[data-base-profile='mirror'] .mr-error-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--mr-g4);
+  padding: var(--mr-g3) var(--mr-g4);
+  border-radius: var(--mr-radius-control);
+  background: rgba(229, 165, 165, 0.08);
+  border: 1px solid rgba(229, 165, 165, 0.18);
+  color: rgba(229, 165, 165, 0.9);
+  font-size: 12px;
+  margin-bottom: var(--mr-g4);
+}

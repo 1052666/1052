@@ -16,7 +16,10 @@ import {
 } from './primitives'
 
 function pctOf(part: number | undefined, total: number | undefined): number {
-  if (!part || !total) return 0
+  // Guard semantics: `null/undefined/0` total → 0%; bare `!part` would
+  // misfire when part is legitimately 0 (still want 0% — same result —
+  // but the boolean coercion hides intent).
+  if (part == null || total == null || total === 0) return 0
   return Math.min(100, Math.max(0, (part / total) * 100))
 }
 
@@ -221,6 +224,16 @@ export function MirrorSettings() {
           </MirrorCard>
         </div>
         <div className="mr-settings-col mr-settings-col-right">
+          {usage.error && (
+            <div className="mr-error-banner" role="alert">
+              <MirrorText role="meta" as="span">
+                ⚠ 加载 Token 统计失败：{usage.error}
+              </MirrorText>
+              <MirrorButton variant="subtle" onClick={() => void usage.refresh()}>
+                重试
+              </MirrorButton>
+            </div>
+          )}
           {/* Card 1: Token 可视化面板 */}
           <MirrorCard level={1} pad="form">
             <header className="mr-card-header">
@@ -243,7 +256,7 @@ export function MirrorSettings() {
               <MirrorStatCard
                 label="用户输入"
                 value={totals?.userTokens ?? null}
-                delta={totals ? { value: `覆盖率 ${coverage.toFixed(1)}%` } : undefined}
+                delta={totals ? { value: `覆盖率 ${Math.round(coverage)}%` } : undefined}
               />
               <MirrorStatCard label="AI 输出" value={totals?.outputTokens ?? null} />
               <MirrorStatCard label="上下文开销" value={totals?.contextTokens ?? null} />
