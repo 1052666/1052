@@ -1,4 +1,4 @@
-import { ReactNode, forwardRef } from 'react'
+import { ReactNode, forwardRef, useState } from 'react'
 
 type CardLevel = 1 | 2 | 3
 type CardInteractive = 'none' | 'highlight' | 'lift'
@@ -99,4 +99,88 @@ export interface MirrorChipProps {
 
 export function MirrorChip({ active, children }: MirrorChipProps) {
   return <span className={`mr-chip${active ? ' is-active' : ''}`}>{children}</span>
+}
+
+// MirrorCollapsible — "收起" section pattern
+export interface MirrorCollapsibleProps {
+  title: string
+  defaultOpen?: boolean
+  rightSlot?: ReactNode
+  children: ReactNode
+  className?: string
+}
+
+export function MirrorCollapsible({ title, defaultOpen = true, rightSlot, children, className }: MirrorCollapsibleProps) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className={`mr-collapsible${className ? ' ' + className : ''}`}>
+      <div className="mr-collapsible-header">
+        <MirrorText role="title" as="h3">{title}</MirrorText>
+        <div className="mr-collapsible-header-right">
+          {rightSlot}
+          <button className="mr-collapsible-toggle" onClick={() => setOpen(o => !o)} type="button">
+            {open ? '收起' : '展开'}
+          </button>
+        </div>
+      </div>
+      {open && <div className="mr-collapsible-body">{children}</div>}
+    </div>
+  )
+}
+
+// MirrorProgressBar — "来源与时间窗口" rows
+export interface MirrorProgressBarProps {
+  label: string
+  detail?: string
+  fillPercent: number
+  totalValue: number | string | null
+  totalLabel?: string
+}
+
+export function MirrorProgressBar({ label, detail, fillPercent, totalValue, totalLabel = 'tokens' }: MirrorProgressBarProps) {
+  const clamped = Math.max(0, Math.min(100, fillPercent))
+  const display = totalValue == null ? '—' : typeof totalValue === 'number' ? totalValue.toLocaleString() : totalValue
+  return (
+    <div className="mr-progress-row">
+      <div className="mr-progress-header">
+        <MirrorText role="title" as="div">{label}</MirrorText>
+        {detail && <MirrorText role="meta" as="div">{detail}</MirrorText>}
+      </div>
+      <div className="mr-progress-bar">
+        <div className="mr-progress-fill" style={{ width: `${clamped}%` }} />
+      </div>
+      <div className="mr-progress-total">
+        <MirrorText role="big-number" as="span">{display}</MirrorText>
+        <MirrorText role="meta" as="span">{totalLabel}</MirrorText>
+      </div>
+    </div>
+  )
+}
+
+// MirrorInput
+export type MirrorInputProps = React.InputHTMLAttributes<HTMLInputElement>
+
+export const MirrorInput = forwardRef<HTMLInputElement, MirrorInputProps>((props, ref) => {
+  const { className, ...rest } = props
+  return <input ref={ref} className={`mr-input${className ? ' ' + className : ''}`} {...rest} />
+})
+MirrorInput.displayName = 'MirrorInput'
+
+// MirrorPresetCard
+export interface MirrorPresetCardProps {
+  name: string
+  url: string
+  modelId?: string
+  onClick?: () => void
+  selected?: boolean
+}
+
+export function MirrorPresetCard({ name, url, modelId, onClick, selected }: MirrorPresetCardProps) {
+  return (
+    <MirrorCard level={2} interactive="lift" pad="tight" onClick={onClick} className={selected ? 'is-selected' : undefined}>
+      <MirrorText role="title" as="div">{name}</MirrorText>
+      {url && <MirrorText role="body" as="div" className="mr-preset-url">{url}</MirrorText>}
+      {modelId && <MirrorText role="meta" as="div">{modelId}</MirrorText>}
+    </MirrorCard>
+  )
 }

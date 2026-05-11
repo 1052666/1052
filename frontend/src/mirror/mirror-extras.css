@@ -167,3 +167,96 @@
   color: var(--fg-1);
   border-color: var(--mr-hair-strong);
 }
+
+/* MirrorCollapsible */
+[data-base-profile='mirror'] .mr-collapsible-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--mr-g3);
+  margin-bottom: var(--mr-g4);
+}
+[data-base-profile='mirror'] .mr-collapsible-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--mr-g3);
+}
+[data-base-profile='mirror'] .mr-collapsible-toggle {
+  background: transparent;
+  border: none;
+  color: var(--fg-4);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 0;
+  transition: color 200ms;
+}
+[data-base-profile='mirror'] .mr-collapsible-toggle:hover { color: var(--fg-2); }
+
+/* MirrorProgressBar */
+[data-base-profile='mirror'] .mr-progress-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: var(--mr-g2) var(--mr-g3);
+  align-items: center;
+}
+[data-base-profile='mirror'] .mr-progress-header {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+[data-base-profile='mirror'] .mr-progress-bar {
+  grid-column: 1;
+  grid-row: 2;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+[data-base-profile='mirror'] .mr-progress-fill {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.18);
+  transition: width 400ms cubic-bezier(.22, 1, .36, 1);
+}
+[data-base-profile='mirror'] .mr-progress-total {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+/* MirrorInput */
+[data-base-profile='mirror'] .mr-input {
+  background: var(--mr-control);
+  border: var(--mr-hair);
+  border-radius: var(--mr-radius-control);
+  padding: 0 var(--mr-g4);
+  height: 36px;
+  color: var(--fg-1);
+  font: inherit;
+  outline: none;
+  transition: var(--mr-transition);
+  box-shadow: var(--mr-inset-bottom);
+}
+[data-base-profile='mirror'] .mr-input:focus {
+  border-color: var(--mr-hair-strong);
+  box-shadow: var(--mr-inset-bottom), 0 0 0 3px rgba(255, 255, 255, 0.04);
+}
+
+/* MirrorPresetCard */
+[data-base-profile='mirror'] .mr-preset-url {
+  margin-top: var(--mr-g1);
+  color: var(--fg-4);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-base-profile='mirror'] .mr-card-level-2.is-selected {
+  border-color: var(--mr-hair-strong);
+  background: var(--mr-surface-strong);
+}
