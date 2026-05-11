@@ -1,9 +1,5 @@
-import { useEffect, useState } from 'react'
-import {
-  AgentApi,
-  type TokenUsageAggregate,
-  type TokenUsageStats,
-} from '../api/agent'
+import { type TokenUsageAggregate } from '../api/agent'
+import { useTokenUsage } from '../hooks/useTokenUsage'
 
 function formatCompact(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`
@@ -70,48 +66,7 @@ function AggregateRow(props: {
 }
 
 export default function TokenUsagePanel() {
-  const [stats, setStats] = useState<TokenUsageStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      try {
-        const next = await AgentApi.getUsageStats()
-        if (!cancelled) {
-          setStats(next)
-          setError('')
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError((err as { message?: string }).message ?? 'Token 统计加载失败')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    void load()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const refresh = async () => {
-    setRefreshing(true)
-    try {
-      const next = await AgentApi.getUsageStats()
-      setStats(next)
-      setError('')
-    } catch (err) {
-      setError((err as { message?: string }).message ?? 'Token 统计刷新失败')
-    } finally {
-      setRefreshing(false)
-    }
-  }
+  const { stats, loading, refreshing, error, refresh } = useTokenUsage()
 
   if (loading && !stats) {
     return (
