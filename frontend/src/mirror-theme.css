@@ -379,11 +379,16 @@
   inset: 0;
   border-radius: inherit;
   padding: 1px;
+  /* IU-7 Task NEW: cursor-driven base angle (fallback to swept --mr-light-angle
+     when cursor absent), per-cohort offset (replaces v1's --mr-card-angle
+     variation, see cohort block below), and future cross-card coupling.
+     Peak alpha 0.46 gains an additive --mr-hover-boost (from .mr-card-int-
+     highlight:hover in mirror-extras.css) plus a future --mr-coupled-strength. */
   background:
     conic-gradient(
-      from var(--mr-light-angle) at 50% 50%,
+      from calc(var(--mr-cursor-angle, var(--mr-light-angle)) + var(--mr-card-angle-offset, 0deg) + var(--mr-coupled-angle, 0deg)) at 50% 50%,
       rgba(255, 255, 255, 0.00)   0deg,
-      rgba(255, 255, 255, 0.46)  55deg,
+      rgba(255, 255, 255, calc(0.46 + var(--mr-hover-boost, 0) + var(--mr-coupled-strength, 0)))  55deg,
       rgba(255, 255, 255, 0.18) 110deg,
       rgba(255, 255, 255, 0.04) 170deg,
       rgba(255, 255, 255, 0.00) 220deg,
@@ -391,7 +396,7 @@
       rgba(255, 255, 255, 0.00) 360deg
     ),
     conic-gradient(
-      from calc(var(--mr-light-angle) + 180deg) at 50% 50%,
+      from calc(var(--mr-cursor-angle, var(--mr-light-angle)) + var(--mr-card-angle-offset, 0deg) + var(--mr-coupled-angle, 0deg) + 180deg) at 50% 50%,
       rgba(255, 255, 255, 0.00)   0deg,
       rgba(255, 255, 255, 0.13)  45deg,
       rgba(255, 255, 255, 0.00) 120deg,
@@ -419,6 +424,16 @@
    cohorts spread around it. The sweep animation adds another +50deg
    over 18s, so peak migrates from 315° → 5° (upper-left → top → top-right).
    Negative animation delays prevent visible cards from aligning at boot. */
+/* IU-7 Task NEW: cohort variation now applied as --mr-card-angle-offset
+   (added to the cursor/light-angle base in the ::after conic-gradient).
+   The base --mr-card-angle stays uniform at 285deg so the sweep keyframe
+   produces an identical 285→335 swept --mr-light-angle for every cohort;
+   the per-cohort offset then shifts that base by {0, -15, +15, +30}deg,
+   reproducing v1's final {285, 270, 300, 315}deg starting angles.
+
+   When --mr-cursor-angle is set by attachCursorTracking(), it overrides
+   the swept light-angle as the base; offsets keep cohort variation under
+   cursor mode. */
 [data-base-profile='mirror'] .settings-section,
 [data-base-profile='mirror'] .settings-preset-card,
 [data-base-profile='mirror'] .theme-profile-preset,
@@ -426,7 +441,8 @@
 [data-base-profile='mirror'] .memory-card,
 [data-base-profile='mirror'] .pkm-result-card,
 [data-base-profile='mirror'] .card {
-  --mr-card-angle: 285deg; /* peak ~340° = 顶部偏左 (closer to top center) */
+  --mr-card-angle: 285deg;
+  --mr-card-angle-offset: 0deg;
   --mr-card-delay: 0s;
 }
 
@@ -437,7 +453,7 @@
 [data-base-profile='mirror'] .memory-card:nth-of-type(4n+2),
 [data-base-profile='mirror'] .pkm-result-card:nth-of-type(4n+2),
 [data-base-profile='mirror'] .card:nth-of-type(4n+2) {
-  --mr-card-angle: 270deg; /* peak ~325° = 偏左但更接近顶 */
+  --mr-card-angle-offset: -15deg; /* v1: 270deg base = 285 + (-15) */
   --mr-card-delay: -1.5s;
 }
 
@@ -448,7 +464,7 @@
 [data-base-profile='mirror'] .memory-card:nth-of-type(4n+3),
 [data-base-profile='mirror'] .pkm-result-card:nth-of-type(4n+3),
 [data-base-profile='mirror'] .card:nth-of-type(4n+3) {
-  --mr-card-angle: 300deg; /* peak ~355° ≈ 正顶 */
+  --mr-card-angle-offset: 15deg; /* v1: 300deg base = 285 + 15 */
   --mr-card-delay: -4.2s;
 }
 
@@ -459,7 +475,7 @@
 [data-base-profile='mirror'] .memory-card:nth-of-type(4n+4),
 [data-base-profile='mirror'] .pkm-result-card:nth-of-type(4n+4),
 [data-base-profile='mirror'] .card:nth-of-type(4n+4) {
-  --mr-card-angle: 315deg; /* peak ~10° = 顶部偏右 (some variation) */
+  --mr-card-angle-offset: 30deg; /* v1: 315deg base = 285 + 30 */
   --mr-card-delay: -7.1s;
 }
 
