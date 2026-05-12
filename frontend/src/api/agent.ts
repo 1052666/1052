@@ -194,7 +194,7 @@ type StreamEvent = {
   durationMs?: number
 }
 
-export type HistorySaveReason = 'sync' | 'clear' | 'replace' | 'compact' | 'repair'
+export type HistorySaveReason = 'sync' | 'clear' | 'replace' | 'compact' | 'repair' | 'command-new'
 
 export const AgentApi = {
   getHistory: () => api.get<ChatHistory>('/agent/history'),
