@@ -329,7 +329,7 @@ describe('useChatModel', () => {
     expect(result.current.pendingUploads).toHaveLength(0)
   })
 
-  it('clearConversation() empties messages and calls saveHistory with reason=clear', async () => {
+  it('clearConversation() empties messages and calls saveHistory with reason=command-new', async () => {
     const api = await getAgentApi()
     api.getHistory.mockResolvedValueOnce({
       messages: [makeMessage({ id: 1, role: 'user', content: 'old' })],
@@ -345,7 +345,9 @@ describe('useChatModel', () => {
 
     expect(result.current.messages).toEqual([])
     const calls = api.saveHistory.mock.calls
-    const clearCall = calls.find((c) => c[1] === 'clear')
+    // Reason label was changed from 'clear' to 'command-new' in main commit
+    // dabe0c8 (minimax image fix). Ported to hook in commit 1a57f99.
+    const clearCall = calls.find((c) => c[1] === 'command-new')
     expect(clearCall).toBeTruthy()
     expect(clearCall![0]).toEqual([])
   })
