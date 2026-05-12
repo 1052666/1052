@@ -140,6 +140,19 @@ export type ToolFinishedInfo = {
   durationMs?: number
 }
 
+// UI-facing record of a tool invocation (running / settled). Lives here so
+// hooks/data layers don't have to depend on UI components.
+export interface ToolCallEntry {
+  callId: string
+  name: string
+  argsPreview?: string
+  dangerous?: boolean
+  status: 'running' | 'ok' | 'error'
+  resultPreview?: string
+  error?: string
+  durationMs?: number
+}
+
 export type StreamHandlers = {
   onDelta: (chunk: string) => void
   onUsage: (usage: TokenUsage) => void

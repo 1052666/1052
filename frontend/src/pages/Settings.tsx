@@ -3,12 +3,11 @@ import {
   SettingsApi,
   type LlmApiFormat,
   type LlmTaskKind,
-  type LlmTaskRoute,
   type LocalModelDiscoveryResult,
   type PublicLlmProfile,
   type PublicSettings,
-  type SettingsPatch,
 } from '../api/settings'
+import { useSettingsPageModel } from '../hooks/useSettingsPageModel'
 import {
   AppearanceApi,
   type AppearanceThemeProfile,
@@ -21,13 +20,12 @@ import ThemePreviewMatrix from '../components/appearance/ThemePreviewMatrix'
 import MemorySummaryPanel from '../components/MemorySummaryPanel'
 import TokenUsagePanel from '../components/TokenUsagePanel'
 import { useTheme } from '../theme-context'
+import { getDirtyScopes, SCOPE_LABELS } from '../mirror/dirtyGuard'
 import {
   canInstallSystemUpdate as getCanInstallSystemUpdate,
   canReinstallArchiveLatest,
   getSystemUpdateInstallOptions,
 } from './settings-update'
-
-type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 function isUpdateRunActive(run: UpdateRun | null): boolean {
   return run?.status === 'queued' || run?.status === 'running' || run?.status === 'handed_off'
@@ -221,10 +219,84 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
     setBaseProfile,
     lockedColorScheme,
   } = useTheme()
-  const [uiLanguage, setUiLanguage] = useState<PublicSettings['appearance']['language']>('zh-CN')
+  const model = useSettingsPageModel()
+  const {
+    loaded,
+    baseUrl,
+    setBaseUrl,
+    modelId,
+    setModelId,
+    llmApiFormat,
+    setLlmApiFormat,
+    apiKey,
+    setApiKey,
+    imageApiFormat,
+    setImageApiFormat,
+    imageBaseUrl,
+    setImageBaseUrl,
+    imageModelId,
+    setImageModelId,
+    imageApiKey,
+    setImageApiKey,
+    imageSize,
+    setImageSize,
+    imageQuality,
+    setImageQuality,
+    imageBackground,
+    setImageBackground,
+    imageOutputFormat,
+    setImageOutputFormat,
+    imageOutputCompression,
+    setImageOutputCompression,
+    ocrProvider,
+    setOcrProvider,
+    ocrCustomBaseUrl,
+    setOcrCustomBaseUrl,
+    ocrCustomModelId,
+    setOcrCustomModelId,
+    ocrCustomApiKey,
+    setOcrCustomApiKey,
+    uapisApiKey,
+    setUapisApiKey,
+    uiLanguage,
+    setUiLanguage,
+    userPrompt,
+    setUserPrompt,
+    streaming,
+    setStreaming,
+    fullAccess,
+    setFullAccess,
+    contextMessageLimit,
+    setContextMessageLimit,
+    progressiveDisclosureEnabled,
+    setProgressiveDisclosureEnabled,
+    providerCachingEnabled,
+    setProviderCachingEnabled,
+    checkpointEnabled,
+    setCheckpointEnabled,
+    seedOnResumeEnabled,
+    setSeedOnResumeEnabled,
+    upgradeDebugEventsEnabled,
+    setUpgradeDebugEventsEnabled,
+    autoCompactEnabled,
+    setAutoCompactEnabled,
+    autoCompactThreshold,
+    setAutoCompactThreshold,
+    morningBriefEnabled,
+    setMorningBriefEnabled,
+    morningBriefTime,
+    setMorningBriefTime,
+    saveState: state,
+    error,
+    save: saveModel,
+    applyLlmPreset,
+    applyImagePreset,
+    syncLlmSettings,
+    updateTaskRoute,
+    taskRouteProfileId,
+  } = model
   const t = (zh: string, en: string) => (uiLanguage === 'en-US' ? en : zh)
   const foldoutLabels = { collapseLabel: t('收起', 'Collapse'), expandLabel: t('展开', 'Expand') }
-  const [loaded, setLoaded] = useState<PublicSettings | null>(null)
   const [appearanceThemes, setAppearanceThemes] = useState<PublicAppearanceThemes | null>(null)
   const [themeJson, setThemeJson] = useState('')
   const [appearanceBusy, setAppearanceBusy] = useState('')
@@ -233,46 +305,11 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
     useState<AppearanceConfirmation>(null)
   const [appearancePreviewConfirmed, setAppearancePreviewConfirmed] = useState(false)
   const [appearanceExperimentalConfirmed, setAppearanceExperimentalConfirmed] = useState(false)
-  const [baseUrl, setBaseUrl] = useState('')
-  const [modelId, setModelId] = useState('')
-  const [llmApiFormat, setLlmApiFormat] = useState<LlmApiFormat>('openai-compatible')
-  const [apiKey, setApiKey] = useState('')
-  const [llmTaskRoutes, setLlmTaskRoutes] = useState<LlmTaskRoute[]>([])
+  const [dirtyScopesAtConfirm, setDirtyScopesAtConfirm] = useState<string[]>([])
   const [localDiscovery, setLocalDiscovery] = useState<LocalModelDiscoveryResult | null>(null)
   const [localDiscoveryBusy, setLocalDiscoveryBusy] = useState(false)
   const [llmActionBusy, setLlmActionBusy] = useState('')
   const [llmActionError, setLlmActionError] = useState('')
-  const [imageApiFormat, setImageApiFormat] =
-    useState<PublicSettings['imageGeneration']['apiFormat']>('openai-compatible')
-  const [imageBaseUrl, setImageBaseUrl] = useState('')
-  const [imageModelId, setImageModelId] = useState('')
-  const [imageApiKey, setImageApiKey] = useState('')
-  const [imageSize, setImageSize] = useState<PublicSettings['imageGeneration']['size']>('auto')
-  const [imageQuality, setImageQuality] =
-    useState<PublicSettings['imageGeneration']['quality']>('auto')
-  const [imageBackground, setImageBackground] =
-    useState<PublicSettings['imageGeneration']['background']>('auto')
-  const [imageOutputFormat, setImageOutputFormat] =
-    useState<PublicSettings['imageGeneration']['outputFormat']>('png')
-  const [imageOutputCompression, setImageOutputCompression] = useState(80)
-  const [ocrProvider, setOcrProvider] =
-    useState<PublicSettings['ocr']['provider']>('uapis')
-  const [ocrCustomBaseUrl, setOcrCustomBaseUrl] = useState('')
-  const [ocrCustomModelId, setOcrCustomModelId] = useState('')
-  const [ocrCustomApiKey, setOcrCustomApiKey] = useState('')
-  const [uapisApiKey, setUapisApiKey] = useState('')
-  const [userPrompt, setUserPrompt] = useState('')
-  const [streaming, setStreaming] = useState(true)
-  const [fullAccess, setFullAccess] = useState(false)
-  const [contextMessageLimit, setContextMessageLimit] = useState(50)
-  const [progressiveDisclosureEnabled, setProgressiveDisclosureEnabled] = useState(true)
-  const [providerCachingEnabled, setProviderCachingEnabled] = useState(true)
-  const [checkpointEnabled, setCheckpointEnabled] = useState(true)
-  const [seedOnResumeEnabled, setSeedOnResumeEnabled] = useState(true)
-  const [autoCompactEnabled, setAutoCompactEnabled] = useState(true)
-  const [autoCompactThreshold, setAutoCompactThreshold] = useState(100)
-  const [morningBriefEnabled, setMorningBriefEnabled] = useState(false)
-  const [morningBriefTime, setMorningBriefTime] = useState('09:30')
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   const toggleGroup = (name: string) => {
@@ -283,9 +320,6 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
       return next
     })
   }
-  const [upgradeDebugEventsEnabled, setUpgradeDebugEventsEnabled] = useState(true)
-  const [state, setState] = useState<SaveState>('idle')
-  const [error, setError] = useState('')
   const [migrationSourcePath, setMigrationSourcePath] = useState('')
   const [migrationPreview, setMigrationPreview] = useState<AgentMigrationPreview | null>(null)
   const [migrationResult, setMigrationResult] = useState<AgentMigrationResult | null>(null)
@@ -304,43 +338,11 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
   const canReinstallArchiveLatestStatus = canReinstallArchiveLatest(updateStatus)
   const canInstallSystemUpdate = getCanInstallSystemUpdate(updateStatus)
 
+  // Hook fetches /settings on mount and hydrates field state. Sync the
+  // ThemeContext-owned `theme` from the loaded payload once it lands.
   useEffect(() => {
-    SettingsApi.get()
-      .then((settings) => {
-        setLoaded(settings)
-        setBaseUrl(settings.llm.baseUrl)
-        setModelId(settings.llm.modelId)
-        setLlmApiFormat(settings.llm.apiFormat)
-        setLlmTaskRoutes(settings.llm.taskRoutes)
-        setImageApiFormat(settings.imageGeneration.apiFormat)
-        setImageBaseUrl(settings.imageGeneration.baseUrl)
-        setImageModelId(settings.imageGeneration.modelId)
-        setImageSize(settings.imageGeneration.size)
-        setImageQuality(settings.imageGeneration.quality)
-        setImageBackground(settings.imageGeneration.background)
-        setImageOutputFormat(settings.imageGeneration.outputFormat)
-        setImageOutputCompression(settings.imageGeneration.outputCompression)
-        setOcrProvider(settings.ocr.provider)
-        setOcrCustomBaseUrl(settings.ocr.customBaseUrl)
-        setOcrCustomModelId(settings.ocr.customModelId)
-        setUserPrompt(settings.agent.userPrompt)
-        setStreaming(settings.agent.streaming)
-        setFullAccess(settings.agent.fullAccess)
-        setContextMessageLimit(settings.agent.contextMessageLimit)
-        setProgressiveDisclosureEnabled(settings.agent.progressiveDisclosureEnabled)
-        setProviderCachingEnabled(settings.agent.providerCachingEnabled)
-        setCheckpointEnabled(settings.agent.checkpointEnabled)
-        setSeedOnResumeEnabled(settings.agent.seedOnResumeEnabled)
-        setUpgradeDebugEventsEnabled(settings.agent.upgradeDebugEventsEnabled)
-        setAutoCompactEnabled(settings.agent.autoCompactEnabled)
-        setAutoCompactThreshold(settings.agent.autoCompactThreshold)
-        setMorningBriefEnabled(settings.agent.morningBrief.enabled)
-        setMorningBriefTime(settings.agent.morningBrief.time)
-        setTheme(settings.appearance.theme)
-        setUiLanguage(settings.appearance.language)
-      })
-      .catch((err) => setError(err.message ?? '设置加载失败'))
-  }, [setTheme])
+    if (loaded) setTheme(loaded.appearance.theme)
+  }, [loaded, setTheme])
 
   useEffect(() => {
     let cancelled = false
@@ -393,26 +395,6 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
     return () => window.clearInterval(timer)
   }, [updateRun])
 
-  const applyLlmPreset = (preset: (typeof LLM_ENDPOINT_PRESETS)[number]) => {
-    setBaseUrl(preset.baseUrl)
-    setModelId(preset.modelId)
-  }
-
-  const applyImagePreset = (preset: (typeof IMAGE_ENDPOINT_PRESETS)[number]) => {
-    setImageApiFormat(preset.apiFormat)
-    setImageBaseUrl(preset.baseUrl)
-    setImageModelId(preset.modelId)
-  }
-
-  const syncLlmSettings = (settings: PublicSettings) => {
-    setLoaded(settings)
-    setBaseUrl(settings.llm.baseUrl)
-    setModelId(settings.llm.modelId)
-    setLlmApiFormat(settings.llm.apiFormat)
-    setApiKey('')
-    setLlmTaskRoutes(settings.llm.taskRoutes)
-  }
-
   const scanLocalModels = async () => {
     setLocalDiscoveryBusy(true)
     setLlmActionError('')
@@ -452,84 +434,9 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
     }
   }
 
-  const updateTaskRoute = (task: LlmTaskKind, profileId: string) => {
-    setLlmTaskRoutes((current) => {
-      const remaining = current.filter((route) => route.task !== task)
-      if (!profileId) return remaining
-      return [...remaining, { task, profileId }]
-    })
-  }
-
-  const taskRouteProfileId = (task: LlmTaskKind) =>
-    llmTaskRoutes.find((route) => route.task === task)?.profileId ?? ''
-
-  const save = async () => {
-    setState('saving')
-    setError('')
-
-    const patch: SettingsPatch = {
-      llm: {
-        baseUrl: baseUrl.trim(),
-        modelId: modelId.trim(),
-        apiFormat: llmApiFormat,
-        taskRoutes: llmTaskRoutes,
-        ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
-      },
-      imageGeneration: {
-        apiFormat: imageApiFormat,
-        baseUrl: imageBaseUrl.trim(),
-        modelId: imageModelId.trim(),
-        ...(imageApiKey.trim() ? { apiKey: imageApiKey.trim() } : {}),
-        size: imageSize,
-        quality: imageQuality,
-        background: imageBackground,
-        outputFormat: imageOutputFormat,
-        outputCompression: imageOutputCompression,
-      },
-      ocr: {
-        provider: ocrProvider,
-        customBaseUrl: ocrCustomBaseUrl.trim(),
-        customModelId: ocrCustomModelId.trim(),
-        ...(ocrCustomApiKey.trim() ? { customApiKey: ocrCustomApiKey.trim() } : {}),
-      },
-      uapis: {
-        ...(uapisApiKey.trim() ? { apiKey: uapisApiKey.trim() } : {}),
-      },
-      appearance: { theme, language: uiLanguage },
-      agent: {
-        streaming,
-        userPrompt,
-        fullAccess,
-        contextMessageLimit,
-        progressiveDisclosureEnabled,
-        providerCachingEnabled,
-        checkpointEnabled,
-        seedOnResumeEnabled,
-        upgradeDebugEventsEnabled,
-        autoCompactEnabled,
-        autoCompactThreshold,
-        morningBrief: {
-          enabled: morningBriefEnabled,
-          time: morningBriefTime,
-        },
-      },
-    }
-
-    try {
-      const settings = await SettingsApi.update(patch)
-      setLoaded(settings)
-      setLlmTaskRoutes(settings.llm.taskRoutes)
-      setApiKey('')
-      setImageApiKey('')
-      setUapisApiKey('')
-      setState('saved')
-      window.setTimeout(() => setState('idle'), 1500)
-    } catch (err) {
-      const errorLike = err as { message?: string }
-      setError(errorLike.message ?? t('设置保存失败', 'Failed to save settings'))
-      setState('error')
-    }
-  }
+  // Patch construction + SettingsApi.update + state machine all live in
+  // the hook. Settings.tsx only provides the theme (owned by ThemeContext).
+  // (No `save` wrapper: would discard the Promise type — call saveModel inline.)
 
   const syncAppearanceThemes = async (themes: PublicAppearanceThemes) => {
     setAppearanceThemes(themes)
@@ -574,6 +481,7 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
     setAppearanceConfirmation(null)
     setAppearancePreviewConfirmed(false)
     setAppearanceExperimentalConfirmed(false)
+    setDirtyScopesAtConfirm([])
   }
 
   const exportThemeProfile = (profile: AppearanceThemeProfile) => {
@@ -589,6 +497,7 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
 
   const requestApplyThemeProfile = (profile: AppearanceThemeProfile) => {
     setAppearanceError('')
+    setDirtyScopesAtConfirm(getDirtyScopes())
     setAppearanceConfirmation({ kind: 'apply', profile })
     setAppearancePreviewConfirmed(false)
     setAppearanceExperimentalConfirmed(false)
@@ -612,6 +521,7 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
 
   const requestResetThemeProfile = () => {
     setAppearanceError('')
+    setDirtyScopesAtConfirm(getDirtyScopes())
     setAppearanceConfirmation({ kind: 'reset' })
     setAppearancePreviewConfirmed(false)
     setAppearanceExperimentalConfirmed(false)
@@ -741,7 +651,12 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
           </div>
         </div>
         <div className="toolbar">
-          <button className="chip primary" onClick={save} disabled={state === 'saving'} type="button">
+          <button
+            className="chip primary"
+            onClick={() => void saveModel(theme)}
+            disabled={state === 'saving'}
+            type="button"
+          >
             {state === 'saving'
               ? t('保存中...', 'Saving...')
               : state === 'saved'
@@ -1745,8 +1660,8 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
                   <div className="settings-row-title">{t('主题风格', 'Theme Style')}</div>
                   <div className="settings-row-desc">
                     {t(
-                      '选择整体视觉风格。「经典」沿用线上外观；「GPT 风格」为深色现代化设计；「水面」为灰度镜面带交互特效（开发中）。',
-                      'Pick the overall visual style. "Classic" keeps the current look; "GPT Style" is a modern dark theme; "Mirror" is a grayscale mirror surface with interaction effects (in progress).',
+                      '选择整体视觉风格。「经典」沿用线上外观；「GPT 风格」为深色现代化设计；「液镜」为深灰镜面金属材质，仅深色。',
+                      'Pick the overall visual style. "Classic" keeps the current look; "GPT Style" is a modern dark theme; "Liquid Mirror" is a graphite-silk material, dark only.',
                     )}
                   </div>
                 </div>
@@ -1766,12 +1681,17 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
                         ? t('经典', 'Classic')
                         : base === 'gpt'
                           ? t('GPT 风格', 'GPT Style')
-                          : t('水面', 'Mirror')}
+                          : t('液镜', 'Liquid Mirror')}
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* Mirror (液镜) is dark-only — the colorScheme picker is
+                  hidden entirely instead of shown disabled. Other base
+                  profiles still see the picker; GPT locks dark via the
+                  existing tooltip path. */}
+              {baseProfile !== 'mirror' && (
               <div className="settings-row">
                 <div className="settings-row-label">
                   <div className="settings-row-title">{t('主题模式', 'Theme Mode')}</div>
@@ -1830,6 +1750,7 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
                   })}
                 </div>
               </div>
+              )}
 
               {onRestartOnboarding ? (
                 <div className="settings-row">
@@ -1952,6 +1873,14 @@ export default function Settings({ onRestartOnboarding }: SettingsProps = {}) {
                             )}
                       </p>
                     </div>
+                    {dirtyScopesAtConfirm.length > 0 ? (
+                      <div className="mr-dirty-warning">
+                        {t(
+                          `⚠ 当前有未保存的内容（${dirtyScopesAtConfirm.map((s) => SCOPE_LABELS[s] ?? s).join('、')}），切换将丢失。`,
+                          `⚠ You have unsaved content (${dirtyScopesAtConfirm.map((s) => SCOPE_LABELS[s] ?? s).join(', ')}) that will be lost on switch.`,
+                        )}
+                      </div>
+                    ) : null}
                     {appearanceConfirmation.kind === 'apply' &&
                     appearanceConfirmation.profile.review.warnings.length > 0 ? (
                       <div className="theme-profile-issues warning">

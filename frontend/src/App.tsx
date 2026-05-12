@@ -1,6 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import OnboardingModal from './components/OnboardingModal'
 import Sidebar from './components/Sidebar'
+import ThemeEffectLayer from './components/ThemeEffectLayer'
+import { MirrorChrome } from './mirror/MirrorChrome'
+import { useTheme } from './theme-context'
 import Chat from './pages/Chat'
 import Calendar from './pages/Calendar'
 import Repository from './pages/Repository'
@@ -28,9 +31,21 @@ import { useOnboarding } from './use-onboarding'
 
 export default function App() {
   const onboarding = useOnboarding()
+  const { baseProfile } = useTheme()
+
+  if (baseProfile === 'mirror') {
+    return (
+      <>
+        <ThemeEffectLayer />
+        <MirrorChrome />
+        <OnboardingModal open={onboarding.shouldShow} onClose={onboarding.markCompleted} />
+      </>
+    )
+  }
 
   return (
     <div className="app">
+      <ThemeEffectLayer />
       <Sidebar />
       <main className="main">
         <Routes>
